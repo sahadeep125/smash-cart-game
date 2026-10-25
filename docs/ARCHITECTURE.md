@@ -101,8 +101,9 @@ so gameplay code never needs to know whether input came from touch or keyboard.
 - `GameState` autoload: `match_duration := 180.0`, `func start_match(karts: Array)`,
   `func end_match()`, `func is_running() -> bool`, `func get_time_left() -> float`,
   `func get_score(kart_name) -> Dictionary`, `func get_results() -> Array`;
-  counts kills/deaths from `Events.kart_killed` (a kill with null killer or killer == victim
-  costs the victim one point? no: only counts a death); emits the match signals in `events.gd`.
+  `set_paused_clock(paused)` (used for the start countdown), `reset()`, `get_rank(name)`;
+  counts kills/deaths from `Events.kart_killed` (a null killer or a self-kill only counts a
+  death); emits the match signals in `events.gd`.
 
 ### UI (`scripts/ui/`)
 - `main_menu.tscn` (main scene): title/branding, Play → `res://scenes/game.tscn`,
