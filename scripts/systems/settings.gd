@@ -99,7 +99,7 @@ func get_player_name() -> String:
 
 
 func has_online_config() -> bool:
-	return supabase_url.begins_with("https://") and supabase_anon_key.length() > 20
+	return (supabase_url.begins_with("https://") or supabase_url.begins_with("http://")) and supabase_anon_key.length() > 20
 
 func should_show_touch_controls() -> bool:
 	match touch_controls:

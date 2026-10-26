@@ -16,7 +16,7 @@ const LAN_PORT := 24680
 const MAX_LAN_PLAYERS := 16
 ## Supabase's free tier allows 100 messages/s for the whole project, and every
 ## broadcast counts once per receiver, so online rooms stay small.
-const MAX_ONLINE_PLAYERS := 6
+const MAX_ONLINE_PLAYERS := 4
 const GAME_SCENE := "res://scenes/game.tscn"
 const LOBBY_SCENE := "res://scenes/lobby.tscn"
 const MENU_SCENE := "res://scenes/main_menu.tscn"
@@ -85,7 +85,7 @@ func snapshot_rate() -> float:
 
 
 func client_state_rate() -> float:
-	return 6.0 if transport == "online" else 20.0
+	return 4.0 if transport == "online" else 20.0
 
 
 # --- Hosting and joining ----------------------------------------------------------------
@@ -282,7 +282,8 @@ func _beacon_info() -> Dictionary:
 func _broadcast_lobby() -> void:
 	if not is_host():
 		return
-	_rpc_lobby.rpc(players, config)
+	if multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		_rpc_lobby.rpc(players, config)
 	discovery.update_info(_beacon_info())
 	lobby_changed.emit()
 

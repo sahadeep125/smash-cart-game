@@ -223,14 +223,14 @@ func _spawn_visual_bullet(kart: Kart) -> void:
 
 @rpc("any_peer", "reliable")
 func _rpc_ready() -> void:
-	if _authority:
+	if _authority and is_inside_tree():
 		_ready_peers[multiplayer.get_remote_sender_id()] = true
 		_check_all_ready()
 
 
 @rpc("any_peer", "unreliable_ordered")
 func _rpc_client_state(kart_id: int, state: Array, trigger: bool) -> void:
-	if not _authority or _owner_of(kart_id) != multiplayer.get_remote_sender_id():
+	if not _authority or not is_inside_tree() or _owner_of(kart_id) != multiplayer.get_remote_sender_id():
 		return
 	var kart: Kart = game.get_kart(kart_id)
 	if kart == null or not kart.remote:
@@ -321,10 +321,10 @@ func _rpc_mine(owner_id: int, mine_id: int, pos: Vector3) -> void:
 
 @rpc("authority", "reliable")
 func _rpc_mine_gone(mine_id: int) -> void:
-	var m: Mine = _mines.get(mine_id)
+	var m: Variant = _mines.get(mine_id)
 	_mines.erase(mine_id)
-	if m and is_instance_valid(m):
-		m.queue_free()
+	if is_instance_valid(m):
+		(m as Mine).queue_free()
 
 
 @rpc("authority", "reliable")
