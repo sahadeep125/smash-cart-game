@@ -15,7 +15,8 @@ be tested headless.
 | `scripts/camera/` | Kart & Arena | `follow_camera.gd` |
 | `scripts/combat/` | Combat | health, weapons, crates, projectiles, explosions, respawn |
 | `scripts/ui/`, `scenes/main_menu.tscn` | UI & Game Systems | menu, HUD, touch controls, match end, settings screen |
-| `scripts/systems/` | UI & Game Systems | autoloads `Settings` and `GameState` (timer, scores) |
+| `scripts/systems/` | UI & Game Systems | autoloads `Settings` and `GameState` (timer, scores), `MatchSetup` (slots), `Teams` |
+| `scripts/net/` | v0.2 | `Net` autoload (sessions, lobby), `MatchSync`, `LanDiscovery`, `SupabasePeer` — see MULTIPLAYER.md |
 
 ## Physics layers
 

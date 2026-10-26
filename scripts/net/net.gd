@@ -81,7 +81,7 @@ func max_players() -> int:
 
 ## Snapshot / state send rates per second for the current transport.
 func snapshot_rate() -> float:
-	return 8.0 if transport == "online" else 20.0
+	return 6.0 if transport == "online" else 20.0
 
 
 func client_state_rate() -> float:

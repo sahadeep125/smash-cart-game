@@ -149,9 +149,11 @@ func _add_name_tag(kart: Kart) -> void:
 	tag.name = "NameTag"
 	tag.text = kart.kart_name
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.font_size = 44
-	tag.outline_size = 12
-	tag.pixel_size = 0.012
+	tag.font_size = 40
+	tag.outline_size = 10
+	# Constant on-screen size so names stay readable at a distance.
+	tag.fixed_size = true
+	tag.pixel_size = 0.0016
 	tag.position = Vector3(0, 2.35, 0)
 	tag.modulate = Teams.team_color(kart.team) if kart.team >= 0 else Color(1, 1, 1, 0.9)
 	tag.outline_modulate = Color(0.05, 0.07, 0.15, 0.85)

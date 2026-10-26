@@ -121,6 +121,7 @@ func _build() -> void:
 
 	_tabs = TabContainer.new()
 	_tabs.custom_minimum_size = Vector2(0, 420)
+	_tabs.add_theme_font_size_override("font_size", 30)
 	_home.add_child(_tabs)
 	_tabs.add_child(_build_solo())
 	_tabs.add_child(_build_lan())

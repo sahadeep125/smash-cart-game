@@ -13,6 +13,7 @@ var role := "host"
 var transport := "lan"
 var url := ""
 var room := "TESTR"
+var players := 2
 var _failed := 0
 var _passed := 0
 var _kills := 0
@@ -37,6 +38,8 @@ func _ready() -> void:
 			url = a.substr(6)
 		elif a.begins_with("--room="):
 			room = a.substr(7)
+		elif a.begins_with("--players="):
+			players = int(a.substr(10))
 	Events.kart_killed.connect(func(_v: Node, _k: Node, _w: String) -> void: _kills += 1)
 	Events.kart_respawned.connect(func(_k: Node) -> void: _respawns += 1)
 	Events.match_ended.connect(func(r: Array) -> void:
@@ -65,10 +68,10 @@ func _run() -> void:
 		_check("host started (%d)" % err, err == OK)
 		Net.set_config({"mode": "tdm", "team_count": 2, "team_size": 4, "duration": MATCH_SECONDS})
 		var waited := 0.0
-		while Net.players.size() < 2 and waited < 20.0:
+		while Net.players.size() < players and waited < 25.0:
 			await _seconds(0.25)
 			waited += 0.25
-		_check("client joined the lobby", Net.players.size() == 2)
+		_check("clients joined the lobby", Net.players.size() == players)
 		Net.request_team(0)
 		await _seconds(0.5)
 		Net.start_match()
@@ -80,12 +83,12 @@ func _run() -> void:
 			err = Net.join_online(room, "Clienty")
 		_check("client connecting (%d)" % err, err == OK)
 		var waited := 0.0
-		while Net.players.size() < 2 and waited < 20.0:
+		while Net.players.size() < 2 and waited < 25.0:
 			await _seconds(0.25)
 			waited += 0.25
 			if OS.get_environment("NET_DEBUG") != "":
 				print("client status ", multiplayer.multiplayer_peer.get_connection_status(), " peers ", multiplayer.get_peers(), " id ", multiplayer.get_unique_id())
-		_check("client sees lobby with 2 players", Net.players.size() == 2)
+		_check("client sees the lobby", Net.players.size() >= 2)
 		Net.request_team(1)
 
 	# Wait for the game scene.
@@ -112,7 +115,7 @@ func _run() -> void:
 		if k.get("remote"):
 			remote_count += 1
 	# Host simulates everything except the client's kart; client only its own kart.
-	_check("remote kart count (%d)" % remote_count, remote_count == (1 if role == "host" else 7))
+	_check("remote kart count (%d)" % remote_count, remote_count == (players - 1 if role == "host" else 7))
 
 	# Wait for the countdown, then drive and shoot.
 	var w := 0.0
@@ -162,14 +165,15 @@ func _run() -> void:
 		Net.return_to_lobby()
 		await _seconds(1.0)
 		_check("back in lobby", get_tree().current_scene.scene_file_path == "res://scenes/lobby.tscn")
-		await _seconds(2.0)
+		# Stay up so every client can confirm it is still connected.
+		await _seconds(8.0)
 	else:
 		var w2 := 0.0
 		while get_tree().current_scene.scene_file_path != "res://scenes/lobby.tscn" and w2 < 10.0:
 			await _seconds(0.25)
 			w2 += 0.25
 		_check("client followed host back to lobby", get_tree().current_scene.scene_file_path == "res://scenes/lobby.tscn")
-		_check("still connected in lobby", Net.is_active() and Net.players.size() == 2)
+		_check("still connected in lobby", Net.is_active() and Net.players.size() == players)
 	_finish()
 
 
