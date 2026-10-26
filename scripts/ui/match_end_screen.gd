@@ -84,9 +84,11 @@ func _build() -> void:
 	buttons.add_child(menu)
 
 
-func _make_row(cells: Array, highlight: bool, is_header := false) -> Control:
+func _make_row(cells: Array, highlight: bool, is_header := false, tint := Color(0, 0, 0, 0)) -> Control:
 	var panel := PanelContainer.new()
 	var bg := ThemeBuilder.ORANGE if highlight else ThemeBuilder.NAVY_LIGHT
+	if tint.a > 0.0 and not highlight:
+		bg = tint.darkened(0.45)
 	if is_header:
 		bg = Color(0, 0, 0, 0)
 	var sb := ThemeBuilder.make_box(Color(bg, 0.85 if highlight else 0.6), 10)
@@ -138,9 +140,30 @@ func show_results(results: Array) -> void:
 		var me := bool(r.get("is_player", false))
 		if me:
 			player_rank = i + 1
-		_table.add_child(_make_row([i + 1, r.get("name", "?"), r.get("kills", 0), r.get("deaths", 0)], me))
+		var team := int(r.get("team", -1))
+		_table.add_child(_make_row([i + 1, r.get("name", "?"), r.get("kills", 0), r.get("deaths", 0)], me, false,
+			Teams.team_color(team) if team >= 0 else Color(0, 0, 0, 0)))
 
-	if _results.is_empty():
+	var teams := GameState.get_team_standings() if GameState.is_team_mode() else []
+	if not teams.is_empty():
+		var my_team := -1
+		for r in _results:
+			if bool(r.get("is_player", false)):
+				my_team = int(r.get("team", -1))
+		var best: Dictionary = teams[0]
+		var tie: bool = teams.size() > 1 and int(teams[1]["kills"]) == int(best["kills"]) and int(teams[1]["deaths"]) == int(best["deaths"])
+		if tie:
+			_banner.text = "IT'S A DRAW!"
+			_banner.add_theme_color_override("font_color", ThemeBuilder.TEAL_LIGHT)
+		elif int(best["team"]) == my_team:
+			_banner.text = "YOUR TEAM WINS!"
+			_banner.add_theme_color_override("font_color", ThemeBuilder.GOLD)
+		else:
+			_banner.text = "TEAM %s WINS!" % str(best["name"]).to_upper()
+			_banner.add_theme_color_override("font_color", best["color"])
+		_subtitle.text = "   ".join(teams.map(func(t: Dictionary) -> String:
+			return "%s %d" % [t["name"], int(t["kills"])]))
+	elif _results.is_empty():
 		_banner.text = "MATCH OVER"
 		_subtitle.text = ""
 	elif player_rank == 1:

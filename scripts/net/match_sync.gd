@@ -188,7 +188,7 @@ func _owner_of(kart_id: int) -> int:
 func _client_tick(delta: float) -> void:
 	_send_timer += delta
 	var me: Kart = game.player
-	if me and _send_timer >= 1.0 / Net.client_state_rate():
+	if me and GameState.is_running() and _send_timer >= 1.0 / Net.client_state_rate():
 		_send_timer = 0.0
 		_rpc_client_state.rpc_id(1, me.net_id, me.net_get_state(), me.net_trigger)
 		me.net_trigger = false

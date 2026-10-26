@@ -39,6 +39,7 @@ var _weapon_label: Label
 var _timer_label: Label
 var _kills_label: Label
 var _leaderboard: VBoxContainer
+var _team_bar: HBoxContainer
 var _kill_feed: VBoxContainer
 var _respawn_overlay: Control
 var _respawn_label: Label
@@ -287,6 +288,13 @@ func _build_top_center(parent: Control) -> void:
 	_timer_label.text = "3:00"
 	timer_panel.add_child(_timer_label)
 
+	# Team Deathmatch: one score chip per team, best first.
+	_team_bar = HBoxContainer.new()
+	_team_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_team_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_team_bar.add_theme_constant_override("separation", 8)
+	box.add_child(_team_bar)
+
 	_kill_feed = VBoxContainer.new()
 	_kill_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_kill_feed.add_theme_constant_override("separation", 4)
@@ -513,7 +521,36 @@ func _update_kills() -> void:
 	_kills_label.text = "KILLS %d" % int(score["kills"])
 
 
+func _refresh_team_bar() -> void:
+	for c in _team_bar.get_children():
+		_team_bar.remove_child(c)
+		c.queue_free()
+	_team_bar.visible = GameState.is_team_mode()
+	if not _team_bar.visible:
+		return
+	var my_team := int(player.get("team")) if player != null and is_instance_valid(player) and "team" in player else -1
+	for t: Dictionary in GameState.get_team_standings():
+		var chip := PanelContainer.new()
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mine := int(t["team"]) == my_team
+		var sb := ThemeBuilder.make_box(Color(t["color"], 0.85 if mine else 0.55), 12,
+			Color.WHITE if mine else Color(0, 0, 0, 0), 3 if mine else 0)
+		sb.content_margin_top = 2
+		sb.content_margin_bottom = 2
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		chip.add_theme_stylebox_override("panel", sb)
+		var l := Label.new()
+		l.text = "%s  %d" % [str(t["name"]).to_upper(), int(t["kills"])]
+		l.add_theme_font_size_override("font_size", 24)
+		l.add_theme_constant_override("outline_size", 6)
+		l.add_theme_color_override("font_outline_color", Color(0.04, 0.06, 0.13, 0.9))
+		chip.add_child(l)
+		_team_bar.add_child(chip)
+
+
 func _refresh_leaderboard() -> void:
+	_refresh_team_bar()
 	for c in _leaderboard.get_children():
 		_leaderboard.remove_child(c)
 		c.queue_free()
@@ -537,11 +574,14 @@ func _leaderboard_row(rank: int, r: Dictionary, is_me: bool) -> Control:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col := ThemeBuilder.ORANGE_LIGHT if is_me else ThemeBuilder.TEXT
+	var team := int(r.get("team", -1))
+	if team >= 0:
+		col = Teams.team_color(team).lightened(0.35 if is_me else 0.1)
 	var rank_l := Label.new()
 	rank_l.text = "%d." % rank
 	rank_l.custom_minimum_size = Vector2(34, 0)
 	var name_l := Label.new()
-	name_l.text = str(r["name"])
+	name_l.text = ("> " if is_me else "") + str(r["name"])
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_l.clip_text = true
 	var kills_l := Label.new()
