@@ -31,7 +31,6 @@ func _make_tile(id: String) -> Button:
 	b.toggle_mode = true
 	b.focus_mode = Control.FOCUS_ALL
 	b.custom_minimum_size = _tile_size
-	b.tooltip_text = Loadout.label(id)
 	b.pressed.connect(func() -> void:
 		selected = id
 		picked.emit(id))

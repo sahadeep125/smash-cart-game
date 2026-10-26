@@ -138,7 +138,7 @@ func _build_how_to() -> Control:
 	box.add_child(ThemeBuilder.make_header("HOW TO PLAY"))
 
 	var goal := Label.new()
-	goal.text = "Drive into glowing crates to get a weapon, then wreck rivals.\nMost kills when the 3:00 timer runs out wins!"
+	goal.text = "Pick a starting weapon and a map on the Play screen. Drive into glowing crates for more weapons, then wreck rivals.\nMost kills when the 3:00 timer runs out wins!"
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	goal.add_theme_font_size_override("font_size", 22)
@@ -162,6 +162,14 @@ func _build_how_to() -> Control:
 		["DRIFT", "Drift"],
 		["FIRE", "Fire"],
 		["II", "Pause"],
+	]))
+	cols.add_child(_controls_column("Gamepad", [
+		["RT / A", "Accelerate"],
+		["LT / B", "Brake / reverse"],
+		["Left stick", "Steer"],
+		["LB / RB", "Drift"],
+		["X / Y", "Fire"],
+		["Start", "Pause"],
 	]))
 
 	var back := ThemeBuilder.make_button("Got it!", false, Vector2(240, 70))

@@ -156,7 +156,7 @@ func _build_solo() -> Control:
 	_solo_diff = _difficulty_option(Settings.ai_difficulty)
 	_row(box, "Bot difficulty", _solo_diff)
 	box.add_child(_small_header("Map"))
-	_solo_map = MapPicker.new(Vector2(170, 186))
+	_solo_map = MapPicker.new(Vector2(150, 166))
 	_solo_map.selected = Settings.map_id
 	box.add_child(_solo_map)
 	var start := ThemeBuilder.make_button("START", false, Vector2(320, 76))
@@ -279,7 +279,7 @@ func _build_room() -> Control:
 	_room_diff.item_selected.connect(func(_i: int) -> void: _push_room_config())
 	_row(settings, "Bot difficulty", _room_diff)
 	settings.add_child(_small_header("Map"))
-	_room_map = MapPicker.new(Vector2(150, 166))
+	_room_map = MapPicker.new(Vector2(140, 156))
 	_room_map.picked.connect(func(_id: String) -> void: _push_room_config())
 	settings.add_child(_room_map)
 	settings.add_child(_small_header("Your weapon"))

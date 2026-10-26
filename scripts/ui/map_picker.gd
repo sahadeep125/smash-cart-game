@@ -38,7 +38,6 @@ func _make_card(id: String) -> Button:
 	var b := Button.new()
 	b.toggle_mode = true
 	b.custom_minimum_size = _card_size
-	b.tooltip_text = str(Maps.info(id)["blurb"]) if id != Maps.RANDOM else "A different map every match."
 	b.pressed.connect(func() -> void:
 		selected = id
 		picked.emit(id))
@@ -58,8 +57,9 @@ func _make_card(id: String) -> Button:
 	var l := Label.new()
 	l.text = Maps.display_name(id)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.add_theme_font_size_override("font_size", 17)
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.clip_text = true
+	l.add_theme_font_size_override("font_size", 15)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(l)
 	return b
