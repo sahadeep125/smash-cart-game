@@ -123,18 +123,19 @@ func _build_rocket_pods(color: Color) -> void:
 	var pod := _cached("rocket_pod", func() -> Array:
 		var r := Basis(Vector3.RIGHT, PI * 0.5)
 		return [
-			[_cyl(0.17, 0.17, 0.9, 8), Transform3D(r, Vector3.ZERO), DARK],
-			[_cyl(0.19, 0.19, 0.12, 8), Transform3D(r, Vector3(0, 0, -0.42)), METAL],
-			[_box(Vector3(0.08, 0.3, 0.3)), Transform3D(Basis(), Vector3(0, -0.2, 0.1)), METAL],
+			[_cyl(0.23, 0.23, 1.05, 8), Transform3D(r, Vector3.ZERO), color.darkened(0.25)],
+			[_cyl(0.25, 0.25, 0.14, 8), Transform3D(r, Vector3(0, 0, -0.48)), METAL],
+			[_cyl(0.25, 0.25, 0.14, 8), Transform3D(r, Vector3(0, 0, 0.45)), DARK],
+			[_box(Vector3(0.1, 0.36, 0.34)), Transform3D(Basis(), Vector3(0, -0.24, 0.1)), METAL],
 		])
 	var rocket := _cached("rocket_tip", func() -> Array:
 		var r := Basis(Vector3.RIGHT, -PI * 0.5)
 		return [
-			[_cyl(0.0, 0.12, 0.28, 8), Transform3D(r, Vector3(0, 0, -0.58)), Color(1.0, 0.9, 0.8)],
-			[_cyl(0.12, 0.12, 0.2, 8), Transform3D(r, Vector3(0, 0, -0.36)), color],
+			[_cyl(0.0, 0.16, 0.36, 8), Transform3D(r, Vector3(0, 0, -0.72)), Color(1.0, 0.95, 0.85)],
+			[_cyl(0.16, 0.16, 0.2, 8), Transform3D(r, Vector3(0, 0, -0.46)), Color(1.0, 0.3, 0.15)],
 		])
 	for side: float in [-1.0, 1.0]:
-		var base := Vector3(side * 0.62, 0.95, 0.05)
+		var base := Vector3(side * 0.68, 1.05, 0.05)
 		_add(_rig, pod, base)
 		var tip := _add(_rig, rocket, base)
 		_ammo_items.append(tip)

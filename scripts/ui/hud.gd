@@ -40,6 +40,10 @@ var _timer_label: Label
 var _kills_label: Label
 var _leaderboard: VBoxContainer
 var _team_bar: HBoxContainer
+var _radar: Radar
+var _damage_flash: ColorRect
+var _popup: Label
+var _wrecked_by: Label
 var _kill_feed: VBoxContainer
 var _respawn_overlay: Control
 var _respawn_label: Label
@@ -102,8 +106,12 @@ func bind_player(kart: Node) -> void:
 	player = kart
 	if kart == null:
 		return
+	if _radar:
+		_radar.player = kart as Node3D
 	var health: Node = kart.get_health() if kart.has_method("get_health") else kart.get_node_or_null("Health")
 	if health:
+		if health.has_signal("damaged"):
+			health.damaged.connect(_on_player_damaged)
 		if health.has_signal("health_changed"):
 			health.health_changed.connect(_on_health_changed)
 		var cur := float(health.get("current_health")) if "current_health" in health else 100.0
@@ -264,6 +272,10 @@ func _build_top_left(parent: Control) -> void:
 	_fps_label.visible = false
 	box.add_child(_fps_label)
 
+	_radar = Radar.new()
+	_radar.name = "Radar"
+	box.add_child(_radar)
+
 
 func _build_top_center(parent: Control) -> void:
 	var box := VBoxContainer.new()
@@ -357,10 +369,42 @@ func _build_center(parent: Control) -> void:
 	wrecked.add_theme_font_size_override("font_size", 56)
 	wrecked.add_theme_constant_override("outline_size", 10)
 	v.add_child(wrecked)
+	_wrecked_by = Label.new()
+	_wrecked_by.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wrecked_by.add_theme_font_size_override("font_size", 26)
+	v.add_child(_wrecked_by)
 	_respawn_label = Label.new()
 	_respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_respawn_label.add_theme_font_size_override("font_size", 32)
 	v.add_child(_respawn_label)
+
+	# Red edge flash when the player is hit.
+	_damage_flash = ColorRect.new()
+	_damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var flash_shader := Shader.new()
+	flash_shader.code = """
+shader_type canvas_item;
+uniform float strength = 0.0;
+void fragment() {
+	float d = distance(UV, vec2(0.5));
+	COLOR = vec4(1.0, 0.1, 0.1, smoothstep(0.35, 0.75, d) * strength);
+}
+"""
+	var flash_mat := ShaderMaterial.new()
+	flash_mat.shader = flash_shader
+	_damage_flash.material = flash_mat
+	_damage_flash.visible = false
+	parent.add_child(_damage_flash)
+
+	# "+1 WRECKED Bolt" style popups for the player's own kills.
+	_popup = ThemeBuilder.make_title_label("", 48)
+	_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_popup.position.y -= 140
+	_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_popup.modulate.a = 0.0
+	parent.add_child(_popup)
 
 	_countdown_label = ThemeBuilder.make_title_label("3", 150)
 	_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -380,6 +424,8 @@ func _unbind_player() -> void:
 		health = player.get_health()
 	if health and health.has_signal("health_changed") and health.health_changed.is_connected(_on_health_changed):
 		health.health_changed.disconnect(_on_health_changed)
+	if health and health.has_signal("damaged") and health.damaged.is_connected(_on_player_damaged):
+		health.damaged.disconnect(_on_player_damaged)
 	var holder: Node = player.get_node_or_null("WeaponHolder")
 	if player.has_method("get_weapon_holder"):
 		holder = player.get_weapon_holder()
@@ -446,6 +492,35 @@ func _on_kart_killed(victim: Node, killer: Node, weapon_id: String) -> void:
 	if victim != null and victim == player and GameState.is_running():
 		_respawn_left = respawn_delay
 		_respawn_overlay.visible = true
+		var by := _kart_name(killer) if killer != null and is_instance_valid(killer) and killer != victim else ""
+		_wrecked_by.text = ("by %s" % by) if by != "" else ""
+		_wrecked_by.visible = by != ""
+	elif killer != null and killer == player and victim != player:
+		_show_popup("WRECKED %s!" % _kart_name(victim).to_upper(), ThemeBuilder.GOLD)
+
+
+func _on_player_damaged(amount: float, _source: Node) -> void:
+	if amount <= 0.0 or _damage_flash == null:
+		return
+	var mat := _damage_flash.material as ShaderMaterial
+	_damage_flash.visible = true
+	var s := clampf(0.35 + amount / 60.0, 0.35, 0.9)
+	mat.set_shader_parameter("strength", s)
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("strength", v), s, 0.0, 0.45)
+	tw.tween_callback(func() -> void: _damage_flash.visible = false)
+
+
+func _show_popup(text: String, color: Color) -> void:
+	_popup.text = text
+	_popup.add_theme_color_override("font_color", color)
+	_popup.pivot_offset = _popup.size * 0.5
+	_popup.scale = Vector2(1.6, 1.6)
+	_popup.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.9)
+	tw.tween_property(_popup, "modulate:a", 0.0, 0.4)
 
 
 func _on_kart_respawned(kart: Node) -> void:
