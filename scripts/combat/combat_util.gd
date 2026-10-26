@@ -13,6 +13,15 @@ const LAYER_PICKUPS := 8
 const KART_CENTER_OFFSET := Vector3(0, 0.5, 0)
 
 
+## False on a networked client: only the host deals damage, spawns real projectiles,
+## runs crates and respawns. Offline and on the host this is true.
+static func is_authority(from: Node) -> bool:
+	if from == null or not from.is_inside_tree():
+		return true
+	var net := from.get_tree().root.get_node_or_null("Net")
+	return net == null or not net.has_method("is_client") or not bool(net.call("is_client"))
+
+
 ## Node new projectiles / effects are parented to.
 static func get_projectile_root(from: Node) -> Node:
 	if from == null or not from.is_inside_tree():
@@ -105,7 +114,27 @@ static func living_karts(tree: SceneTree, exclude: Node = null) -> Array[Node3D]
 	return out
 
 
+## Living karts that are not `owner` and not on its team.
+static func living_enemies(tree: SceneTree, owner: Node) -> Array[Node3D]:
+	var out: Array[Node3D] = []
+	for k in living_karts(tree, owner):
+		if not are_allies(k, owner):
+			out.append(k)
+	return out
+
+
+## True when both karts are on the same team (teams are >= 0; -1 means free-for-all).
+static func are_allies(a: Node, b: Node) -> bool:
+	if a == null or b == null or a == b or not is_instance_valid(a) or not is_instance_valid(b):
+		return false
+	var ta: Variant = a.get("team")
+	var tb: Variant = b.get("team")
+	return ta != null and tb != null and int(ta) >= 0 and int(ta) == int(tb)
+
+
 static func deal_damage(kart: Node, amount: float, source: Node, weapon_id: String) -> void:
+	if are_allies(kart, source):
+		return
 	var h := get_health(kart)
 	if h != null:
 		var src: Node = source if source != null and is_instance_valid(source) else null
@@ -141,7 +170,12 @@ static func sweep(from_node: Node3D, a: Vector3, b: Vector3, kart_radius: float,
 	var space := from_node.get_world_3d().direct_space_state
 	var params := PhysicsRayQueryParameters3D.create(a, b, LAYER_WORLD | LAYER_KARTS)
 	if exclude is CollisionObject3D and is_instance_valid(exclude):
-		params.exclude = [(exclude as CollisionObject3D).get_rid()]
+		var rids: Array[RID] = [(exclude as CollisionObject3D).get_rid()]
+		# Shots pass through teammates.
+		for k in from_node.get_tree().get_nodes_in_group("karts"):
+			if k is CollisionObject3D and are_allies(k, exclude):
+				rids.append((k as CollisionObject3D).get_rid())
+		params.exclude = rids
 	var hit := space.intersect_ray(params)
 	if not hit.is_empty():
 		var kart := find_kart(hit.collider as Node)
@@ -150,7 +184,7 @@ static func sweep(from_node: Node3D, a: Vector3, b: Vector3, kart_radius: float,
 			result = {"position": hit.position, "normal": hit.normal, "kart": kart}
 
 	# Proximity test so fast projectiles don't slip past karts between frames.
-	for k in living_karts(from_node.get_tree(), exclude):
+	for k in living_enemies(from_node.get_tree(), exclude):
 		var c := kart_center(k)
 		var p := Geometry3D.get_closest_point_to_segment(c, a, b)
 		var d := p - c

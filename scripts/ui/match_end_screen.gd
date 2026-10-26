@@ -154,6 +154,11 @@ func show_results(results: Array) -> void:
 	_root.visible = true
 	_root.modulate.a = 0.0
 	create_tween().tween_property(_root, "modulate:a", 1.0, 0.35)
+	if Net.is_client():
+		_play_again.text = "Waiting for host"
+		_play_again.disabled = true
+	elif Net.is_host():
+		_play_again.text = "Back to lobby"
 	_play_again.grab_focus()
 
 
@@ -169,11 +174,15 @@ func _on_match_ended(results: Array) -> void:
 
 func _on_play_again() -> void:
 	play_again_pressed.emit()
+	if Net.is_host():
+		Net.return_to_lobby()
+		return
 	_leave_to(GAME_SCENE)
 
 
 func _on_main_menu() -> void:
 	main_menu_pressed.emit()
+	Net.leave()
 	_leave_to(MAIN_MENU_SCENE)
 
 

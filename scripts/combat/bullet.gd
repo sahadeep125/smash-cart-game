@@ -5,6 +5,8 @@ extends Node3D
 const HIT_RADIUS := 0.75
 
 var owner_kart: Node3D
+## Networked client copy: shows impacts but deals no damage.
+var visual_only := false
 var weapon_id := "machine_gun"
 var damage := 4.0
 var knockback_force := 0.6
@@ -52,8 +54,9 @@ func _physics_process(delta: float) -> void:
 		return
 	var kart: Node3D = hit.kart
 	if kart != null:
-		CombatUtil.knockback(kart, velocity.normalized() * knockback_force)
-		CombatUtil.deal_damage(kart, damage, owner_kart, weapon_id)
+		if not visual_only:
+			CombatUtil.knockback(kart, velocity.normalized() * knockback_force)
+			CombatUtil.deal_damage(kart, damage, owner_kart, weapon_id)
 		CombatFx.burst(get_parent(), hit.position, color, 6, 5.0, 0.1, 0.25, -6.0)
 	else:
 		CombatFx.burst(get_parent(), hit.position, Color(1.0, 0.75, 0.4), 5, 4.0, 0.08, 0.3, -12.0)

@@ -47,6 +47,12 @@ func _ready() -> void:
 	global_position = _origin
 	_build_visual()
 	CombatSfx.play("explosion", _origin, self)
+	if CombatUtil.is_authority(self):
+		Events.explosion_fx.emit(_origin, radius, color, shake)
+	else:
+		# Networked client: purely visual, the host already applied the effects.
+		_applied = true
+		CombatUtil.request_shake(get_tree(), _origin, shake)
 
 
 func _physics_process(_delta: float) -> void:
@@ -62,8 +68,8 @@ func _apply_effects() -> void:
 	var center := global_position
 	var src: Node3D = source if is_instance_valid(source) else null
 	for k in CombatUtil.living_karts(get_tree()):
-		if k == src:
-			continue  # no self-damage
+		if k == src or CombatUtil.are_allies(k, src):
+			continue  # no self-damage, no friendly fire
 		var offset := CombatUtil.kart_center(k) - center
 		var d := offset.length()
 		if d > radius:

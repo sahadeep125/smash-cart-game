@@ -31,6 +31,7 @@ func _ready() -> void:
 func _run() -> void:
 	GameState.match_duration = MATCH_SECONDS
 	Settings.ai_count = 5
+	Settings.game_mode = "ffa"
 	Events.kart_killed.connect(func(_v: Node, _k: Node, w: String) -> void:
 		_kills += 1
 		_weapons_used[w] = int(_weapons_used.get(w, 0)) + 1)
@@ -52,9 +53,13 @@ func _run() -> void:
 		return _finish()
 	play.pressed.emit()
 	await _frames(20)
+	var lobby := get_tree().current_scene
+	_check("play screen opens from Play", lobby != null and lobby.scene_file_path == "res://scenes/lobby.tscn")
+	lobby.call("_on_solo_start")
+	await _frames(20)
 
 	var game := get_tree().current_scene
-	_check("game scene loads from Play", game != null and game.scene_file_path == "res://scenes/game.tscn")
+	_check("game scene loads from Solo start", game != null and game.scene_file_path == "res://scenes/game.tscn")
 	var karts := get_tree().get_nodes_in_group("karts")
 	_check("6 karts spawned (1 player + 5 AI)", karts.size() == 6)
 	var player_count := karts.filter(func(k: Node) -> bool: return k.get("is_player") == true).size()

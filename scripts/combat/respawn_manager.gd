@@ -6,6 +6,8 @@ extends Node
 @export var respawn_delay: float = 3.0
 ## When true (default) no respawns happen while GameState reports the match isn't running.
 @export var require_running_match: bool = true
+## Networked clients: only hide dead karts; the host decides respawns and plays the blast.
+@export var passive: bool = false
 
 var _pending := {}
 
@@ -18,17 +20,32 @@ func is_pending(kart: Node) -> bool:
 	return _pending.has(kart)
 
 
+## Networked clients: the host respawned `kart` at `xform`.
+func net_respawn(kart: Node, xform: Transform3D) -> void:
+	_pending.erase(kart)
+	if kart.has_method("respawn_at"):
+		kart.call("respawn_at", xform)
+	var health := CombatUtil.get_health(kart)
+	if health != null:
+		health.reset()
+	var root := CombatUtil.get_projectile_root(self)
+	CombatFx.burst(root, xform.origin + Vector3.UP * 0.6, Color(0.4, 0.9, 1.0), 24, 6.0, 0.14, 0.6, 2.0)
+	Events.kart_respawned.emit(kart)
+
+
 func _on_kart_killed(victim: Node, _killer: Node, _weapon_id: String) -> void:
 	if victim == null or not is_instance_valid(victim) or _pending.has(victim):
 		return
 	_pending[victim] = true
-	if victim is Node3D:
+	if victim is Node3D and not passive:
 		_spawn_death_fx.call_deferred((victim as Node3D).global_position)
 	if victim.has_method("set_alive"):
 		victim.call("set_alive", false)
 	var holder := CombatUtil.get_weapon_holder(victim)
 	if holder != null:
 		holder.clear()
+	if passive:
+		return
 	get_tree().create_timer(respawn_delay, false).timeout.connect(_respawn.bind(victim))
 
 

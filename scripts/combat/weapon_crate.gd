@@ -48,8 +48,20 @@ func _on_body_entered(body: Node) -> void:
 	_try_give(body)
 
 
+## Networked clients: show the host's crate state (no pickups happen locally).
+func net_set_available(value: bool) -> void:
+	if value == _available:
+		return
+	if value:
+		_respawn()
+	else:
+		CombatFx.burst(get_parent(), global_position + Vector3.UP * HOVER_HEIGHT, Color(1, 1, 1), 14, 6.0, 0.14, 0.4, -6.0)
+		CombatSfx.play("pickup", global_position, self)
+		_set_available(false)
+
+
 func _try_give(body: Node) -> bool:
-	if not _available:
+	if not _available or not CombatUtil.is_authority(self):
 		return false
 	var kart := CombatUtil.find_kart(body)
 	if kart == null or not CombatUtil.is_kart_alive(kart):

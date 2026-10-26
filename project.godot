@@ -16,6 +16,7 @@ config/icon="res://assets/icons/icon.svg"
 Events="*res://scripts/core/events.gd"
 Settings="*res://scripts/systems/settings.gd"
 GameState="*res://scripts/systems/game_state.gd"
+Net="*res://scripts/net/net.gd"
 
 [display]
 

@@ -13,6 +13,9 @@ const HOLD_REFIRE_DELAY := 0.9
 
 var current_weapon_id: String = ""
 var ammo: int = 0
+## Networked client: never fires locally. Trigger pulls are latched on the kart
+## (kart.net_trigger) and sent to the host, which fires the real weapon.
+var proxy := false
 
 var _cooldown := 0.0
 var _trigger_frame := -100
@@ -79,7 +82,23 @@ func fire() -> bool:
 	return true
 
 
+## Networked clients: mirror the host's weapon state.
+func net_set(id: String, p_ammo: int) -> void:
+	if id == current_weapon_id and p_ammo == ammo:
+		return
+	if id == "":
+		clear()
+		return
+	current_weapon_id = id
+	ammo = p_ammo
+	weapon_changed.emit(current_weapon_id, ammo)
+
+
 func _on_fire_requested() -> void:
+	if proxy:
+		if _kart != null:
+			_kart.set("net_trigger", true)
+		return
 	var frame := Engine.get_physics_frames()
 	var new_press := frame - _trigger_frame > 1
 	_trigger_frame = frame
@@ -92,6 +111,8 @@ func _on_fire_requested() -> void:
 func _physics_process(delta: float) -> void:
 	_cooldown = maxf(_cooldown - delta, 0.0)
 	_since_shot += delta
+	if proxy:
+		return
 	if has_weapon() and WeaponDB.is_auto_fire(current_weapon_id) and _is_trigger_held():
 		fire()
 
@@ -117,6 +138,7 @@ func _fire_rocket() -> void:
 	var r := RocketProjectile.new()
 	r.setup(_kart, muzzle.origin, dir, WeaponDB.get_data("rocket"), _forward_speed(dir))
 	root.add_child(r)
+	Events.projectile_spawned.emit("rocket", _kart, muzzle.origin, dir, r)
 	CombatSfx.play("rocket", muzzle.origin, self)
 
 
@@ -145,6 +167,7 @@ func _drop_mine() -> void:
 	var m := Mine.new()
 	m.setup(_kart, pos, WeaponDB.get_data("mine"))
 	root.add_child(m)
+	Events.projectile_spawned.emit("mine", _kart, pos, fwd, m)
 	CombatSfx.play("drop", pos, self)
 
 
