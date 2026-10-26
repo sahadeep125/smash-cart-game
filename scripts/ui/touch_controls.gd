@@ -34,6 +34,9 @@ var _stick_rest := Vector2.ZERO
 var _stick_radius := 80.0
 var _stick_zone := Rect2()
 var _safe_margins := Vector4.ZERO  # left, top, right, bottom
+## Held weapon shown on the FIRE button ("" = none, button dimmed).
+var _weapon_id := ""
+var _weapon_color := Color.WHITE
 
 
 func _init() -> void:
@@ -252,6 +255,12 @@ func get_steer_value() -> float:
 	return _steer_value
 
 
+func set_weapon(id: String, color: Color) -> void:
+	_weapon_id = id
+	_weapon_color = color
+	queue_redraw()
+
+
 # --- Drawing --------------------------------------------------------------------
 
 func _draw() -> void:
@@ -275,12 +284,23 @@ func _draw() -> void:
 		var c: Vector2 = _centers[action]
 		var r: float = _radii[action]
 		var col: Color = BUTTONS[action]["color"]
+		var is_fire: bool = action == "fire"
+		if is_fire:
+			col = _weapon_color if _weapon_id != "" else Color(0.45, 0.47, 0.55)
 		var pressed := held.has(action)
 		var fill := col.darkened(0.3) if pressed else col
 		fill.a = 0.85 if pressed else 0.6
 		draw_circle(c, r, fill)
 		draw_arc(c, r, 0, TAU, 48, Color(1, 1, 1, 0.8 if pressed else 0.5), 4.0, true)
 		var text: String = BUTTONS[action]["label"]
+		if is_fire and _weapon_id != "":
+			WeaponIcon.draw_icon(self, _weapon_id, c + Vector2(0, -r * 0.28), r * 0.34, Color(0.05, 0.07, 0.15, 0.85))
+			var fs2 := int(clampf(r * 0.3, 12, 36))
+			var ts2 := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, fs2)
+			var tp2 := c + Vector2(-ts2.x * 0.5, r * 0.5)
+			draw_string_outline(font, tp2, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, 6, Color(0.04, 0.06, 0.13, 0.9))
+			draw_string(font, tp2, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color.WHITE)
+			continue
 		var fs := int(clampf(r * 0.42, 14, 48))
 		var ts := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, fs)
 		var tp := c + Vector2(-ts.x * 0.5, fs * 0.35)

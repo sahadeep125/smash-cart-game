@@ -10,6 +10,12 @@ const WEAPON_DB_PATH := "res://scripts/combat/weapon_db.gd"
 const KILL_FEED_MAX := 4
 const KILL_FEED_LIFETIME := 4.5
 const LOW_TIME := 30.0
+const WEAPON_HINTS := {
+	"rocket": "Fire: homing rocket, big blast",
+	"machine_gun": "Hold fire: rapid shots",
+	"mine": "Fire: drop a mine behind you",
+	"shield": "Fire: 5 s of invulnerability",
+}
 
 ## Seconds shown in the "Respawning in N" overlay (matches RespawnManager default).
 var respawn_delay := 3.0
@@ -27,8 +33,8 @@ var _touch: TouchControls
 var _health_bar: ProgressBar
 var _health_label: Label
 var _health_fill: StyleBoxFlat
-var _weapon_swatch: Panel
-var _weapon_style: StyleBoxFlat
+var _weapon_swatch: WeaponIcon
+var _weapon_card: WeaponCard
 var _weapon_label: Label
 var _timer_label: Label
 var _kills_label: Label
@@ -196,6 +202,13 @@ func _build() -> void:
 	_build_top_right(layer_root)
 	_build_center(layer_root)
 
+	_weapon_card = WeaponCard.new()
+	_weapon_card.name = "WeaponCard"
+	_weapon_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_weapon_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_weapon_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	layer_root.add_child(_weapon_card)
+
 
 func _build_top_left(parent: Control) -> void:
 	var box := VBoxContainer.new()
@@ -235,10 +248,8 @@ func _build_top_left(parent: Control) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	weapon_panel.add_child(row)
-	_weapon_swatch = Panel.new()
-	_weapon_swatch.custom_minimum_size = Vector2(30, 30)
-	_weapon_style = ThemeBuilder.make_box(ThemeBuilder.TEXT_DIM, 15)
-	_weapon_swatch.add_theme_stylebox_override("panel", _weapon_style)
+	_weapon_swatch = WeaponIcon.new()
+	_weapon_swatch.custom_minimum_size = Vector2(34, 34)
 	_weapon_swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_weapon_swatch)
 	_weapon_label = Label.new()
@@ -379,14 +390,20 @@ func _on_health_changed(current: float, max_value: float) -> void:
 
 
 func _on_weapon_changed(weapon_id: String, ammo: int) -> void:
+	var col := weapon_color(weapon_id) if weapon_id != "" else ThemeBuilder.TEXT_DIM
+	_weapon_swatch.weapon_id = weapon_id
+	_weapon_swatch.color = col
+	if _weapon_card:
+		_weapon_card.show_weapon(weapon_id, ammo, weapon_display_name(weapon_id) if weapon_id != "" else "",
+			col, str(WEAPON_HINTS.get(weapon_id, "")))
+	if _touch:
+		_touch.set_weapon(weapon_id, col)
 	if weapon_id == "":
 		_weapon_label.text = "No weapon - grab a crate!"
 		_weapon_label.add_theme_color_override("font_color", ThemeBuilder.TEXT_DIM)
-		_weapon_style.bg_color = Color(ThemeBuilder.TEXT_DIM, 0.4)
 		return
 	_weapon_label.text = "%s  x%d" % [weapon_display_name(weapon_id).to_upper(), ammo]
 	_weapon_label.add_theme_color_override("font_color", ThemeBuilder.TEXT)
-	_weapon_style.bg_color = weapon_color(weapon_id)
 
 
 func _on_match_started() -> void:

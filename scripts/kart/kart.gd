@@ -93,6 +93,10 @@ func _ready() -> void:
 		_model.name = "Model"
 		_model.kart_color = kart_color
 		add_child(_model)
+	var holder := get_weapon_holder()
+	if holder:
+		holder.weapon_changed.connect(_model.set_weapon)
+		holder.weapon_fired.connect(_model.on_weapon_fired)
 
 
 # --- Public API -------------------------------------------------------------
