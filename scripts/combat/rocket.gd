@@ -6,6 +6,8 @@ extends Node3D
 const HIT_RADIUS := 1.1
 
 var owner_kart: Node3D
+## Networked client copy: flies and looks the same but never explodes by itself.
+var visual_only := false
 var weapon_id := "rocket"
 var speed := 34.0
 var damage := 45.0
@@ -104,7 +106,7 @@ func _physics_process(delta: float) -> void:
 func _steer(delta: float) -> void:
 	var best: Node3D = null
 	var best_dot := homing_cos
-	for k in CombatUtil.living_karts(get_tree(), owner_kart):
+	for k in CombatUtil.living_enemies(get_tree(), owner_kart):
 		var to_k := CombatUtil.kart_center(k) - global_position
 		var d := to_k.length()
 		if d < 0.5 or d > homing_range:
@@ -134,5 +136,8 @@ func _explode(at: Vector3) -> void:
 	var root := get_parent()
 	CombatFx.detach_trail(_trail, root)
 	_trail = null
+	if visual_only:
+		queue_free()
+		return
 	Explosion.spawn(root, at, radius, damage, owner_kart, weapon_id, knockback_force, 0.6, color)
 	queue_free()

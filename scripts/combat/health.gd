@@ -62,6 +62,31 @@ func reset() -> void:
 	set_invulnerable(spawn_invulnerability)
 
 
+## Networked clients: mirror the host's health and invulnerability.
+func net_set(current: float, invulnerable_time: float) -> void:
+	if _dead:
+		return
+	if not is_equal_approx(current, current_health):
+		var lost := current_health - current
+		current_health = current
+		if lost > 0.0:
+			damaged.emit(lost, null)
+		health_changed.emit(current_health, max_health)
+	if invulnerable_time > 0.05 and _invulnerable_time <= 0.0:
+		set_invulnerable(invulnerable_time)
+	elif invulnerable_time <= 0.0 and _invulnerable_time > 0.0:
+		set_invulnerable(0.0)
+
+
+## Networked clients: the host says this kart died. Emits the same signals as a local death.
+func net_kill(killer: Node, weapon_id: String) -> void:
+	if _dead:
+		return
+	current_health = 0.0
+	health_changed.emit(current_health, max_health)
+	_die(killer, weapon_id)
+
+
 func is_dead() -> bool:
 	return _dead
 

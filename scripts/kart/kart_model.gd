@@ -17,6 +17,7 @@ var _front_pivots: Array[Node3D] = []
 var _wheel_spinners: Array[MeshInstance3D] = []
 var _smoke: Array[CPUParticles3D] = []
 var _flame: MeshInstance3D
+var _mount: WeaponMount
 var _spin: float = 0.0
 var _steer_vis: float = 0.0
 var _last_speed: float = 0.0
@@ -31,6 +32,18 @@ func _ready() -> void:
 func set_color(c: Color) -> void:
 	kart_color = c
 	_rebuild_body()
+
+
+## Shows the held weapon's hardware on the kart ("" removes it).
+func set_weapon(id: String, ammo: int) -> void:
+	if _mount:
+		var color := WeaponDB.get_color(id) if id != "" else Color.WHITE
+		_mount.show_weapon(id, ammo, color)
+
+
+func on_weapon_fired(id: String) -> void:
+	if _mount:
+		_mount.on_fired(id)
 
 
 func reset_pose() -> void:
@@ -147,6 +160,10 @@ func _build() -> void:
 			_wheel_spinners.append(spinner)
 			if wz < 0.0:
 				_front_pivots.append(pivot)
+
+	_mount = WeaponMount.new()
+	_mount.name = "WeaponMount"
+	_tilt.add_child(_mount)
 
 	# Boost flame (hidden until boosting).
 	_flame = MeshInstance3D.new()

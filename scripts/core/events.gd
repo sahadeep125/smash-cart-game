@@ -11,6 +11,10 @@ signal kart_respawned(kart: Node)
 signal weapon_picked_up(kart: Node, weapon_id: String)
 ## Visual feedback: something exploded at a world position.
 signal explosion_happened(position: Vector3, radius: float)
+## The authoritative peer spawned a rocket or mine (networking forwards it as a visual).
+signal projectile_spawned(kind: String, owner: Node, origin: Vector3, direction: Vector3, node: Node)
+## The authoritative peer created an explosion (networking forwards it as a visual).
+signal explosion_fx(position: Vector3, radius: float, color: Color, shake: float)
 ## Ask the follow camera to shake (0..1 strength).
 signal camera_shake_requested(strength: float)
 

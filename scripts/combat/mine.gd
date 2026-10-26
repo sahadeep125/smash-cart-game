@@ -5,6 +5,9 @@ class_name Mine
 extends Node3D
 
 var owner_kart: Node3D
+## Networked: id shared with clients; visual_only copies never trigger by themselves.
+var net_id := -1
+var visual_only := false
 var weapon_id := "mine"
 var damage := 50.0
 var radius := 3.5
@@ -86,9 +89,9 @@ func _physics_process(delta: float) -> void:
 	if _age >= lifetime:
 		_fizzle()
 		return
-	if _age < arm_time:
+	if _age < arm_time or visual_only:
 		return
-	for k in CombatUtil.living_karts(get_tree(), owner_kart):
+	for k in CombatUtil.living_enemies(get_tree(), owner_kart):
 		var d := k.global_position - global_position
 		if absf(d.y) < 2.0 and Vector2(d.x, d.z).length() <= trigger_radius:
 			detonate()
@@ -106,7 +109,7 @@ func _process(_delta: float) -> void:
 
 ## Sets the mine off (from a kart or a nearby explosion).
 func detonate() -> void:
-	if _done:
+	if _done or visual_only:
 		return
 	_done = true
 	var src: Node3D = owner_kart if is_instance_valid(owner_kart) else null
@@ -116,7 +119,7 @@ func detonate() -> void:
 
 ## Chain reaction with a small delay so explosions ripple outward.
 func trigger_chain(delay := 0.12) -> void:
-	if _done or not is_inside_tree():
+	if _done or visual_only or not is_inside_tree():
 		return
 	get_tree().create_timer(delay, false).timeout.connect(detonate)
 

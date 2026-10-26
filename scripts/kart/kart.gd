@@ -8,6 +8,8 @@ signal fire_requested
 signal bumped(other: Node, strength: float)
 ## Emitted when a drift boost fires.
 signal drift_boosted
+## Emitted when knockback hits a kart that another peer simulates (network forwards it).
+signal remote_knockback(impulse: Vector3)
 
 const BOX_SIZE := Vector3(1.6, 0.8, 2.4)
 const FALL_LIMIT_Y := -20.0
@@ -32,6 +34,22 @@ const FALL_LIMIT_Y := -20.0
 var kart_name: String = "Kart"
 var kart_color: Color = Color(0.9, 0.3, 0.2)
 var is_player: bool = false
+## Team index (>= 0) in Team Deathmatch, -1 in free-for-all.
+var team: int = -1
+## Stable id shared by every peer in a networked match (slot index).
+var net_id: int = -1
+## Networked: true when another peer simulates this kart; we only show its synced state.
+var remote: bool = false
+## Networked: set when the local controller pulled the trigger since the last state send.
+var net_trigger: bool = false
+
+var _net_pos := Vector3.ZERO
+var _net_vel := Vector3.ZERO
+var _net_yaw := 0.0
+var _net_age := 0.0
+var _net_has_state := false
+var _net_steer := 0.0
+var _net_drift := false
 var alive: bool = true
 var controls_enabled: bool = true
 
@@ -93,9 +111,17 @@ func _ready() -> void:
 		_model.name = "Model"
 		_model.kart_color = kart_color
 		add_child(_model)
+	var holder := get_weapon_holder()
+	if holder:
+		holder.weapon_changed.connect(_model.set_weapon)
+		holder.weapon_fired.connect(_model.on_weapon_fired)
 
 
 # --- Public API -------------------------------------------------------------
+
+func is_ally(other: Node) -> bool:
+	return other != self and team >= 0 and other != null and other.get("team") == team
+
 
 func request_fire() -> void:
 	if alive and controls_enabled:
@@ -140,6 +166,9 @@ func is_boosting() -> bool:
 func apply_knockback(impulse: Vector3) -> void:
 	if not alive:
 		return
+	if remote:
+		remote_knockback.emit(impulse)
+		return
 	velocity += impulse
 	_knock_time = 0.45
 	if impulse.y > 0.5:
@@ -168,6 +197,7 @@ func respawn_at(xform: Transform3D) -> void:
 		fwd = Vector3.FORWARD
 	global_transform = Transform3D(Basis.looking_at(fwd.normalized(), Vector3.UP), xform.origin)
 	_knock_time = 0.0
+	_net_has_state = false
 	set_alive(true)
 	if _model:
 		_model.reset_pose()
@@ -175,14 +205,57 @@ func respawn_at(xform: Transform3D) -> void:
 
 ## Called by another kart when it bumps into this one.
 func receive_bump(delta_v: Vector3) -> void:
+	if remote:
+		return  # its owner resolves its own collisions
 	velocity += delta_v
 	_knock_time = maxf(_knock_time, 0.2)
+
+
+# --- Network state ----------------------------------------------------------------
+
+## Packs what other peers need to show this kart: [pos, yaw, vel, steer, flags].
+func net_get_state() -> Array:
+	var flags := (1 if drifting else 0) | (2 if boost_time > 0.0 else 0)
+	return [global_position, rotation.y, velocity, snappedf(steer, 0.01), flags]
+
+
+## Applies a state packed by net_get_state() on the owning peer.
+func net_apply_state(state: Array) -> void:
+	if state.size() < 5:
+		return
+	_net_pos = state[0]
+	_net_yaw = state[1]
+	_net_vel = state[2]
+	_net_steer = state[3]
+	_net_drift = (int(state[4]) & 1) != 0
+	boost_time = 0.3 if (int(state[4]) & 2) != 0 else 0.0
+	_net_age = 0.0
+	if not _net_has_state or global_position.distance_to(_net_pos) > 8.0:
+		global_position = _net_pos
+		rotation.y = _net_yaw
+	_net_has_state = true
+
+
+func _remote_process(delta: float) -> void:
+	if not _net_has_state:
+		return
+	# Dead reckoning from the last state, eased towards it so corrections stay smooth.
+	_net_age = minf(_net_age + delta, 0.35)
+	var predicted := _net_pos + _net_vel * _net_age
+	global_position = global_position.lerp(predicted, clampf(delta * 14.0, 0.0, 1.0))
+	rotation.y = lerp_angle(rotation.y, _net_yaw, clampf(delta * 14.0, 0.0, 1.0))
+	velocity = _net_vel
+	if _model:
+		_model.update_visual(delta, get_forward_speed(), _net_steer, _net_drift, false, Vector3.UP, true, global_transform.basis)
 
 
 # --- Physics ------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
 	if not alive:
+		return
+	if remote:
+		_remote_process(delta)
 		return
 	if global_position.y < FALL_LIMIT_Y:
 		_rescue_from_fall()

@@ -142,7 +142,7 @@ func _pick_enemy() -> Kart:
 	var best_score := INF
 	for n in get_tree().get_nodes_in_group("karts"):
 		var k := n as Kart
-		if k == null or k == kart or not k.alive:
+		if k == null or k == kart or not k.alive or kart.is_ally(k):
 			continue
 		var d := kart.global_position.distance_to(k.global_position)
 		# Slight randomness and stickiness so AIs spread over different targets.
@@ -331,7 +331,7 @@ func _enemy_in_cone(dir: Vector3, range_m: float, min_dot: float) -> bool:
 	var origin := kart.global_position + Vector3.UP * 0.7
 	for n in get_tree().get_nodes_in_group("karts"):
 		var k := n as Kart
-		if k == null or k == kart or not k.alive:
+		if k == null or k == kart or not k.alive or kart.is_ally(k):
 			continue
 		var to := k.global_position + Vector3.UP * 0.7 - origin
 		var d := to.length()

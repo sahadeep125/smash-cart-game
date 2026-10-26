@@ -67,7 +67,7 @@ func _build() -> void:
 
 	_ai_count = SpinBox.new()
 	_ai_count.min_value = 1
-	_ai_count.max_value = 7
+	_ai_count.max_value = 15
 	_ai_count.step = 1
 	_ai_count.rounded = true
 	_ai_count.custom_minimum_size = Vector2(160, 56)

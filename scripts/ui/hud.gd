@@ -10,6 +10,12 @@ const WEAPON_DB_PATH := "res://scripts/combat/weapon_db.gd"
 const KILL_FEED_MAX := 4
 const KILL_FEED_LIFETIME := 4.5
 const LOW_TIME := 30.0
+const WEAPON_HINTS := {
+	"rocket": "Fire: homing rocket, big blast",
+	"machine_gun": "Hold fire: rapid shots",
+	"mine": "Fire: drop a mine behind you",
+	"shield": "Fire: 5 s of invulnerability",
+}
 
 ## Seconds shown in the "Respawning in N" overlay (matches RespawnManager default).
 var respawn_delay := 3.0
@@ -27,12 +33,17 @@ var _touch: TouchControls
 var _health_bar: ProgressBar
 var _health_label: Label
 var _health_fill: StyleBoxFlat
-var _weapon_swatch: Panel
-var _weapon_style: StyleBoxFlat
+var _weapon_swatch: WeaponIcon
+var _weapon_card: WeaponCard
 var _weapon_label: Label
 var _timer_label: Label
 var _kills_label: Label
 var _leaderboard: VBoxContainer
+var _team_bar: HBoxContainer
+var _radar: Radar
+var _damage_flash: ColorRect
+var _popup: Label
+var _wrecked_by: Label
 var _kill_feed: VBoxContainer
 var _respawn_overlay: Control
 var _respawn_label: Label
@@ -95,8 +106,12 @@ func bind_player(kart: Node) -> void:
 	player = kart
 	if kart == null:
 		return
+	if _radar:
+		_radar.player = kart as Node3D
 	var health: Node = kart.get_health() if kart.has_method("get_health") else kart.get_node_or_null("Health")
 	if health:
+		if health.has_signal("damaged"):
+			health.damaged.connect(_on_player_damaged)
 		if health.has_signal("health_changed"):
 			health.health_changed.connect(_on_health_changed)
 		var cur := float(health.get("current_health")) if "current_health" in health else 100.0
@@ -196,6 +211,13 @@ func _build() -> void:
 	_build_top_right(layer_root)
 	_build_center(layer_root)
 
+	_weapon_card = WeaponCard.new()
+	_weapon_card.name = "WeaponCard"
+	_weapon_card.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_weapon_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_weapon_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	layer_root.add_child(_weapon_card)
+
 
 func _build_top_left(parent: Control) -> void:
 	var box := VBoxContainer.new()
@@ -235,10 +257,8 @@ func _build_top_left(parent: Control) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	weapon_panel.add_child(row)
-	_weapon_swatch = Panel.new()
-	_weapon_swatch.custom_minimum_size = Vector2(30, 30)
-	_weapon_style = ThemeBuilder.make_box(ThemeBuilder.TEXT_DIM, 15)
-	_weapon_swatch.add_theme_stylebox_override("panel", _weapon_style)
+	_weapon_swatch = WeaponIcon.new()
+	_weapon_swatch.custom_minimum_size = Vector2(34, 34)
 	_weapon_swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_weapon_swatch)
 	_weapon_label = Label.new()
@@ -251,6 +271,10 @@ func _build_top_left(parent: Control) -> void:
 	_fps_label.add_theme_color_override("font_color", ThemeBuilder.GOLD)
 	_fps_label.visible = false
 	box.add_child(_fps_label)
+
+	_radar = Radar.new()
+	_radar.name = "Radar"
+	box.add_child(_radar)
 
 
 func _build_top_center(parent: Control) -> void:
@@ -275,6 +299,13 @@ func _build_top_center(parent: Control) -> void:
 	_timer_label.custom_minimum_size = Vector2(150, 0)
 	_timer_label.text = "3:00"
 	timer_panel.add_child(_timer_label)
+
+	# Team Deathmatch: one score chip per team, best first.
+	_team_bar = HBoxContainer.new()
+	_team_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_team_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_team_bar.add_theme_constant_override("separation", 8)
+	box.add_child(_team_bar)
 
 	_kill_feed = VBoxContainer.new()
 	_kill_feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -338,10 +369,42 @@ func _build_center(parent: Control) -> void:
 	wrecked.add_theme_font_size_override("font_size", 56)
 	wrecked.add_theme_constant_override("outline_size", 10)
 	v.add_child(wrecked)
+	_wrecked_by = Label.new()
+	_wrecked_by.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_wrecked_by.add_theme_font_size_override("font_size", 26)
+	v.add_child(_wrecked_by)
 	_respawn_label = Label.new()
 	_respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_respawn_label.add_theme_font_size_override("font_size", 32)
 	v.add_child(_respawn_label)
+
+	# Red edge flash when the player is hit.
+	_damage_flash = ColorRect.new()
+	_damage_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_damage_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var flash_shader := Shader.new()
+	flash_shader.code = """
+shader_type canvas_item;
+uniform float strength = 0.0;
+void fragment() {
+	float d = distance(UV, vec2(0.5));
+	COLOR = vec4(1.0, 0.1, 0.1, smoothstep(0.35, 0.75, d) * strength);
+}
+"""
+	var flash_mat := ShaderMaterial.new()
+	flash_mat.shader = flash_shader
+	_damage_flash.material = flash_mat
+	_damage_flash.visible = false
+	parent.add_child(_damage_flash)
+
+	# "+1 WRECKED Bolt" style popups for the player's own kills.
+	_popup = ThemeBuilder.make_title_label("", 48)
+	_popup.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_popup.position.y -= 140
+	_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_popup.modulate.a = 0.0
+	parent.add_child(_popup)
 
 	_countdown_label = ThemeBuilder.make_title_label("3", 150)
 	_countdown_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -361,6 +424,8 @@ func _unbind_player() -> void:
 		health = player.get_health()
 	if health and health.has_signal("health_changed") and health.health_changed.is_connected(_on_health_changed):
 		health.health_changed.disconnect(_on_health_changed)
+	if health and health.has_signal("damaged") and health.damaged.is_connected(_on_player_damaged):
+		health.damaged.disconnect(_on_player_damaged)
 	var holder: Node = player.get_node_or_null("WeaponHolder")
 	if player.has_method("get_weapon_holder"):
 		holder = player.get_weapon_holder()
@@ -379,14 +444,20 @@ func _on_health_changed(current: float, max_value: float) -> void:
 
 
 func _on_weapon_changed(weapon_id: String, ammo: int) -> void:
+	var col := weapon_color(weapon_id) if weapon_id != "" else ThemeBuilder.TEXT_DIM
+	_weapon_swatch.weapon_id = weapon_id
+	_weapon_swatch.color = col
+	if _weapon_card:
+		_weapon_card.show_weapon(weapon_id, ammo, weapon_display_name(weapon_id) if weapon_id != "" else "",
+			col, str(WEAPON_HINTS.get(weapon_id, "")))
+	if _touch:
+		_touch.set_weapon(weapon_id, col)
 	if weapon_id == "":
 		_weapon_label.text = "No weapon - grab a crate!"
 		_weapon_label.add_theme_color_override("font_color", ThemeBuilder.TEXT_DIM)
-		_weapon_style.bg_color = Color(ThemeBuilder.TEXT_DIM, 0.4)
 		return
 	_weapon_label.text = "%s  x%d" % [weapon_display_name(weapon_id).to_upper(), ammo]
 	_weapon_label.add_theme_color_override("font_color", ThemeBuilder.TEXT)
-	_weapon_style.bg_color = weapon_color(weapon_id)
 
 
 func _on_match_started() -> void:
@@ -421,6 +492,35 @@ func _on_kart_killed(victim: Node, killer: Node, weapon_id: String) -> void:
 	if victim != null and victim == player and GameState.is_running():
 		_respawn_left = respawn_delay
 		_respawn_overlay.visible = true
+		var by := _kart_name(killer) if killer != null and is_instance_valid(killer) and killer != victim else ""
+		_wrecked_by.text = ("by %s" % by) if by != "" else ""
+		_wrecked_by.visible = by != ""
+	elif killer != null and killer == player and victim != player:
+		_show_popup("WRECKED %s!" % _kart_name(victim).to_upper(), ThemeBuilder.GOLD)
+
+
+func _on_player_damaged(amount: float, _source: Node) -> void:
+	if amount <= 0.0 or _damage_flash == null:
+		return
+	var mat := _damage_flash.material as ShaderMaterial
+	_damage_flash.visible = true
+	var s := clampf(0.35 + amount / 60.0, 0.35, 0.9)
+	mat.set_shader_parameter("strength", s)
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void: mat.set_shader_parameter("strength", v), s, 0.0, 0.45)
+	tw.tween_callback(func() -> void: _damage_flash.visible = false)
+
+
+func _show_popup(text: String, color: Color) -> void:
+	_popup.text = text
+	_popup.add_theme_color_override("font_color", color)
+	_popup.pivot_offset = _popup.size * 0.5
+	_popup.scale = Vector2(1.6, 1.6)
+	_popup.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_property(_popup, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.9)
+	tw.tween_property(_popup, "modulate:a", 0.0, 0.4)
 
 
 func _on_kart_respawned(kart: Node) -> void:
@@ -496,7 +596,36 @@ func _update_kills() -> void:
 	_kills_label.text = "KILLS %d" % int(score["kills"])
 
 
+func _refresh_team_bar() -> void:
+	for c in _team_bar.get_children():
+		_team_bar.remove_child(c)
+		c.queue_free()
+	_team_bar.visible = GameState.is_team_mode()
+	if not _team_bar.visible:
+		return
+	var my_team := int(player.get("team")) if player != null and is_instance_valid(player) and "team" in player else -1
+	for t: Dictionary in GameState.get_team_standings():
+		var chip := PanelContainer.new()
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var mine := int(t["team"]) == my_team
+		var sb := ThemeBuilder.make_box(Color(t["color"], 0.85 if mine else 0.55), 12,
+			Color.WHITE if mine else Color(0, 0, 0, 0), 3 if mine else 0)
+		sb.content_margin_top = 2
+		sb.content_margin_bottom = 2
+		sb.content_margin_left = 12
+		sb.content_margin_right = 12
+		chip.add_theme_stylebox_override("panel", sb)
+		var l := Label.new()
+		l.text = "%s  %d" % [str(t["name"]).to_upper(), int(t["kills"])]
+		l.add_theme_font_size_override("font_size", 24)
+		l.add_theme_constant_override("outline_size", 6)
+		l.add_theme_color_override("font_outline_color", Color(0.04, 0.06, 0.13, 0.9))
+		chip.add_child(l)
+		_team_bar.add_child(chip)
+
+
 func _refresh_leaderboard() -> void:
+	_refresh_team_bar()
 	for c in _leaderboard.get_children():
 		_leaderboard.remove_child(c)
 		c.queue_free()
@@ -520,11 +649,14 @@ func _leaderboard_row(rank: int, r: Dictionary, is_me: bool) -> Control:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col := ThemeBuilder.ORANGE_LIGHT if is_me else ThemeBuilder.TEXT
+	var team := int(r.get("team", -1))
+	if team >= 0:
+		col = Teams.team_color(team).lightened(0.35 if is_me else 0.1)
 	var rank_l := Label.new()
 	rank_l.text = "%d." % rank
 	rank_l.custom_minimum_size = Vector2(34, 0)
 	var name_l := Label.new()
-	name_l.text = str(r["name"])
+	name_l.text = ("> " if is_me else "") + str(r["name"])
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_l.clip_text = true
 	var kills_l := Label.new()

@@ -19,6 +19,14 @@ var ai_count: int = 5
 var ai_difficulty: float = 0.6
 var camera_shake: bool = true
 var show_fps: bool = false
+var player_name: String = ""
+## "ffa" or "tdm" for solo matches against bots.
+var game_mode: String = "ffa"
+var team_count: int = 2
+var team_size: int = 4
+## Online play through Supabase Realtime (your own free project; see README).
+var supabase_url: String = ""
+var supabase_anon_key: String = ""
 
 ## Where save()/load_settings() read and write. Tests may point this elsewhere.
 var save_path: String = SAVE_PATH
@@ -42,6 +50,12 @@ func save() -> void:
 	cfg.set_value(SECTION, "ai_difficulty", ai_difficulty)
 	cfg.set_value(SECTION, "camera_shake", camera_shake)
 	cfg.set_value(SECTION, "show_fps", show_fps)
+	cfg.set_value(SECTION, "player_name", player_name)
+	cfg.set_value(SECTION, "game_mode", game_mode)
+	cfg.set_value(SECTION, "team_count", team_count)
+	cfg.set_value(SECTION, "team_size", team_size)
+	cfg.set_value(SECTION, "supabase_url", supabase_url)
+	cfg.set_value(SECTION, "supabase_anon_key", supabase_anon_key)
 	var err := cfg.save(save_path)
 	if err != OK:
 		push_warning("Settings: could not save %s (error %d)" % [save_path, err])
@@ -56,10 +70,16 @@ func load_settings() -> void:
 		music_volume = clampf(float(cfg.get_value(SECTION, "music_volume", music_volume)), 0.0, 1.0)
 		var mode := str(cfg.get_value(SECTION, "touch_controls", touch_controls))
 		touch_controls = mode if mode in TOUCH_MODES else "auto"
-		ai_count = clampi(int(cfg.get_value(SECTION, "ai_count", ai_count)), 1, 7)
+		ai_count = clampi(int(cfg.get_value(SECTION, "ai_count", ai_count)), 1, 15)
 		ai_difficulty = clampf(float(cfg.get_value(SECTION, "ai_difficulty", ai_difficulty)), 0.0, 1.0)
 		camera_shake = bool(cfg.get_value(SECTION, "camera_shake", camera_shake))
 		show_fps = bool(cfg.get_value(SECTION, "show_fps", show_fps))
+		player_name = str(cfg.get_value(SECTION, "player_name", player_name)).substr(0, 14)
+		game_mode = "tdm" if str(cfg.get_value(SECTION, "game_mode", game_mode)) == "tdm" else "ffa"
+		team_count = clampi(int(cfg.get_value(SECTION, "team_count", team_count)), 2, 4)
+		team_size = clampi(int(cfg.get_value(SECTION, "team_size", team_size)), 1, 4)
+		supabase_url = str(cfg.get_value(SECTION, "supabase_url", supabase_url)).strip_edges()
+		supabase_anon_key = str(cfg.get_value(SECTION, "supabase_anon_key", supabase_anon_key)).strip_edges()
 	apply()
 
 
@@ -72,6 +92,14 @@ func apply() -> void:
 
 
 # --- Queries ----------------------------------------------------------------
+
+func get_player_name() -> String:
+	var n := player_name.strip_edges()
+	return n if n != "" else "Player"
+
+
+func has_online_config() -> bool:
+	return (supabase_url.begins_with("https://") or supabase_url.begins_with("http://")) and supabase_anon_key.length() > 20
 
 func should_show_touch_controls() -> bool:
 	match touch_controls:

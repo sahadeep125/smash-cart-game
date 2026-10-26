@@ -48,6 +48,8 @@ func _build() -> void:
 	box.add_child(_resume_button)
 	var restart := ThemeBuilder.make_button("Restart", true)
 	restart.pressed.connect(_on_restart)
+	# A networked match can't be restarted by one player.
+	restart.visible = not Net.is_active()
 	box.add_child(restart)
 	var settings_btn := ThemeBuilder.make_button("Settings", true)
 	settings_btn.pressed.connect(_on_settings)
@@ -69,7 +71,9 @@ func open() -> void:
 	if _root.visible or not _can_pause():
 		return
 	_root.visible = true
-	get_tree().paused = true
+	# Networked matches keep running for everyone else.
+	if not Net.is_active():
+		get_tree().paused = true
 	_resume_button.grab_focus()
 	opened.emit()
 
@@ -121,6 +125,7 @@ func _on_restart() -> void:
 
 
 func _on_main_menu() -> void:
+	Net.leave()
 	_leave_to(MAIN_MENU_SCENE)
 
 

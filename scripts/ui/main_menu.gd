@@ -2,6 +2,7 @@
 extends Control
 
 const GAME_SCENE := "res://scenes/game.tscn"
+const PLAY_SCENE := "res://scenes/lobby.tscn"
 
 const BG_SHADER := """
 shader_type canvas_item;
@@ -36,6 +37,7 @@ var _how_to: Control
 func _ready() -> void:
 	get_tree().paused = false
 	GameState.reset()
+	Net.leave()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = ThemeBuilder.get_theme()
 	_build_background()
@@ -213,8 +215,5 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_play() -> void:
-	if not ResourceLoader.exists(GAME_SCENE):
-		push_warning("Game scene missing: %s" % GAME_SCENE)
-		return
 	# Deferred so the pressed button finishes its input handling before the menu is freed.
-	get_tree().change_scene_to_file.call_deferred(GAME_SCENE)
+	get_tree().change_scene_to_file.call_deferred(PLAY_SCENE)
