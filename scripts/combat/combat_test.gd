@@ -222,7 +222,7 @@ func _run() -> void:
 	place(a, Vector3(0, 0.05, 0))
 	place(b, Vector3(0, 0.05, -12))
 	holder(a).give_weapon("machine_gun")
-	check("give_weapon machine_gun", holder(a).current_weapon_id == "machine_gun" and holder(a).ammo == 30)
+	check("give_weapon machine_gun", holder(a).current_weapon_id == "machine_gun" and holder(a).ammo == WeaponDB.get_ammo("machine_gun"))
 	await wait(0.15)
 	for i in 60:  # hold the trigger 1 s
 		a.call("request_fire")
@@ -230,7 +230,7 @@ func _run() -> void:
 		await get_tree().physics_frame
 	var mg_dmg := 100.0 - hp(b)
 	var mg_ammo := holder(a).ammo
-	check("machine gun auto-fires while held", mg_ammo <= 30 - 9, "ammo left %d" % mg_ammo)
+	check("machine gun auto-fires while held", mg_ammo <= WeaponDB.get_ammo("machine_gun") - 9, "ammo left %d" % mg_ammo)
 	check("machine gun damages target", mg_dmg >= 20.0, "damage %.0f" % mg_dmg)
 	place(b, Vector3(50, 0.05, 50))  # out of the line of fire so it survives
 	for i in 240:

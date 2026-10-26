@@ -1,11 +1,12 @@
 ## Headless test harness: arena + 4 AI karts + follow camera, runs N physics frames,
 ## prints positions / speeds and a summary, then quits.
-## Run: godot --headless res://scripts/kart/kart_test_scene.tscn [-- --frames=1200]
+## Run: godot --headless res://scripts/kart/kart_test_scene.tscn [-- --frames=1200 --map=harbor]
 extends Node3D
 
 @export var frames: int = 1200
 
-var arena: Arena
+var arena: ArenaBase
+var map_id := Maps.DEFAULT
 var karts: Array[Kart] = []
 var camera: FollowCamera
 var _frame: int = 0
@@ -21,7 +22,9 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--frames="):
 			frames = int(arg.trim_prefix("--frames="))
-	arena = Arena.new()
+		elif arg.begins_with("--map="):
+			map_id = arg.trim_prefix("--map=")
+	arena = Maps.create(map_id)
 	add_child(arena)
 	var spawns := arena.get_spawn_points()
 	var colors: Array[Color] = [Color(0.9, 0.2, 0.2), Color(0.2, 0.5, 0.95), Color(0.2, 0.8, 0.3), Color(0.95, 0.8, 0.2)]
@@ -44,7 +47,7 @@ func _ready() -> void:
 	camera = FollowCamera.new()
 	add_child(camera)
 	camera.set_target(karts[0])
-	print("[kart_test] arena=%s spawns=%d crate_spawns=%d frames=%d" % [Arena.ARENA_NAME, spawns.size(), arena.get_crate_spawn_points().size(), frames])
+	print("[kart_test] arena=%s spawns=%d crate_spawns=%d frames=%d" % [arena.get_display_name(), spawns.size(), arena.get_crate_spawn_points().size(), frames])
 
 
 func _physics_process(_delta: float) -> void:

@@ -6,7 +6,7 @@ extends Node3D
 const SPAWN_SPACING := 3.2
 
 var setup: Dictionary
-var arena: Arena
+var arena: ArenaBase
 var player: Kart
 var karts: Array[Kart] = []
 var karts_by_id: Dictionary = {}
@@ -31,8 +31,10 @@ func _ready() -> void:
 		GameState.match_duration = float(setup["duration"])
 	GameState.authority = authority
 
-	arena = Arena.new()
+	setup["map"] = Maps.resolve(str(setup.get("map", Maps.DEFAULT)))
+	arena = Maps.create(str(setup["map"]))
 	arena.name = "Arena"
+	Music.play(str(setup["map"]))
 	add_child(arena)
 
 	var projectiles := Node3D.new()
@@ -67,6 +69,8 @@ func _ready() -> void:
 
 	for kart in karts:
 		kart.controls_enabled = false
+	if authority:
+		Events.kart_respawned.connect(_on_kart_respawned)
 	if networked:
 		var sync := MatchSync.new()
 		sync.name = "MatchSync"
@@ -88,10 +92,36 @@ func start_match() -> void:
 	GameState.set_paused_clock(false)
 	for kart in karts:
 		kart.controls_enabled = true
+		if authority:
+			_give_loadout(kart)
 
 
 func get_kart(id: int) -> Kart:
 	return karts_by_id.get(id) as Kart
+
+
+## Changes the weapon `kart` starts its next lives with. Networked clients send the
+## request to the host (MatchSync); the host and offline games apply it directly.
+func request_loadout(kart: Kart, weapon: String) -> void:
+	weapon = Loadout.sanitize(weapon)
+	kart.loadout = weapon
+	if not authority:
+		var sync := get_node_or_null("MatchSync")
+		if sync != null:
+			sync.call("send_loadout", kart.net_id, weapon)
+
+
+## Authority: arms a kart with its loadout weapon at the start of a life.
+func _give_loadout(kart: Kart) -> void:
+	var id := Loadout.roll(kart.loadout)
+	var holder := kart.get_weapon_holder()
+	if id != "" and holder != null and kart.alive:
+		holder.give_weapon(id)
+
+
+func _on_kart_respawned(kart: Node) -> void:
+	if kart is Kart and GameState.is_running():
+		_give_loadout(kart as Kart)
 
 
 ## Hands a kart to a bot (used when its player leaves a networked match).
@@ -114,6 +144,7 @@ func _create_kart(slot: Dictionary, xform: Transform3D) -> Kart:
 	kart.setup(str(slot["name"]), slot["color"], local)
 	kart.team = int(slot.get("team", -1))
 	kart.net_id = int(slot["id"])
+	kart.loadout = Loadout.sanitize(str(slot.get("weapon", "")))
 	# Bots run on the authority; human karts run on their own peer.
 	kart.remote = not local and not (peer == 0 and authority)
 

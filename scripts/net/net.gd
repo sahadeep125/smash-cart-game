@@ -11,7 +11,7 @@ signal lobby_changed
 signal session_ended(reason: String)
 signal joined_lobby
 
-const GAME_VERSION := "0.2"
+const GAME_VERSION := "0.3"
 const LAN_PORT := 24680
 const MAX_LAN_PLAYERS := 16
 ## Supabase's free tier allows 100 messages/s for the whole project, and every
@@ -25,11 +25,11 @@ const MENU_SCENE := "res://scenes/main_menu.tscn"
 var transport := ""
 var room_code := ""
 var host_address := ""
-## Lobby roster: [{peer: int, name: String, team: int}]
+## Lobby roster: [{peer: int, name: String, team: int, weapon: String}]
 var players: Array = []
 ## Match settings chosen by the host.
 var config := {"mode": "ffa", "team_count": 2, "team_size": 4, "ai_count": 3,
-	"ai_difficulty": 0.6, "duration": 180.0}
+	"ai_difficulty": 0.6, "duration": 180.0, "map": Maps.DEFAULT}
 var in_match := false
 var discovery: LanDiscovery
 
@@ -169,6 +169,8 @@ func set_config(values: Dictionary) -> void:
 	config["team_count"] = clampi(int(config["team_count"]), 2, Teams.MAX_TEAMS)
 	config["team_size"] = clampi(int(config["team_size"]), 1, Teams.MAX_TEAM_SIZE)
 	config["ai_count"] = clampi(int(config["ai_count"]), 0, MatchSetup.MAX_KARTS - 1)
+	var map := str(config.get("map", Maps.DEFAULT))
+	config["map"] = map if map == Maps.RANDOM or Maps.has_map(map) else Maps.DEFAULT
 	_rebalance_teams()
 	_broadcast_lobby()
 
@@ -181,6 +183,15 @@ func request_team(team: int) -> void:
 		_rpc_set_team.rpc_id(1, team)
 
 
+## Any peer: choose the weapon we start each life with (see Loadout).
+func request_weapon(weapon: String) -> void:
+	weapon = Loadout.sanitize(weapon)
+	if is_host():
+		_set_weapon(1, weapon)
+	elif is_client():
+		_rpc_set_weapon.rpc_id(1, weapon)
+
+
 ## Host: start the match for everyone.
 func start_match() -> void:
 	if not is_host():
@@ -188,6 +199,8 @@ func start_match() -> void:
 	var setup := MatchSetup.build(str(config["mode"]), players, int(config["ai_count"]),
 		int(config["team_count"]), int(config["team_size"]), float(config["duration"]),
 		float(config["ai_difficulty"]))
+	# Resolve "random" once here so every peer loads the same map.
+	setup["map"] = Maps.resolve(str(config.get("map", Maps.DEFAULT)))
 	multiplayer.multiplayer_peer.refuse_new_connections = true
 	discovery.stop()
 	_rpc_start_match.rpc(MatchSetup.to_wire(setup))
@@ -219,7 +232,7 @@ func _rpc_hello(player_name: String, version: String) -> void:
 			if is_active():
 				multiplayer.multiplayer_peer.disconnect_peer(from))
 		return
-	players.append({"peer": from, "name": _unique_name(player_name.strip_edges().substr(0, 14)), "team": -1})
+	players.append({"peer": from, "name": _unique_name(player_name.strip_edges().substr(0, 14)), "team": -1, "weapon": ""})
 	_rebalance_teams()
 	_broadcast_lobby()
 
@@ -236,6 +249,8 @@ func _rpc_lobby(p_players: Array, p_config: Dictionary) -> void:
 	config = p_config
 	if first:
 		joined_lobby.emit()
+		if Settings.weapon_pick != "":
+			request_weapon(Settings.weapon_pick)
 	lobby_changed.emit()
 
 
@@ -243,6 +258,12 @@ func _rpc_lobby(p_players: Array, p_config: Dictionary) -> void:
 func _rpc_set_team(team: int) -> void:
 	if is_host():
 		_set_team(multiplayer.get_remote_sender_id(), team)
+
+
+@rpc("any_peer", "reliable")
+func _rpc_set_weapon(weapon: String) -> void:
+	if is_host():
+		_set_weapon(multiplayer.get_remote_sender_id(), Loadout.sanitize(weapon))
 
 
 @rpc("authority", "reliable", "call_local")
@@ -269,7 +290,7 @@ func _rpc_back_to_lobby() -> void:
 # --- Internals ----------------------------------------------------------------------
 
 func _start_hosting(player_name: String) -> void:
-	players = [{"peer": 1, "name": player_name.strip_edges().substr(0, 14), "team": 0}]
+	players = [{"peer": 1, "name": player_name.strip_edges().substr(0, 14), "team": 0, "weapon": Settings.weapon_pick}]
 	in_match = false
 	lobby_changed.emit()
 
@@ -299,6 +320,13 @@ func _set_team(peer: int, team: int) -> void:
 	for p in players:
 		if int(p["peer"]) == peer:
 			p["team"] = team
+	_broadcast_lobby()
+
+
+func _set_weapon(peer: int, weapon: String) -> void:
+	for p in players:
+		if int(p["peer"]) == peer:
+			p["weapon"] = weapon
 	_broadcast_lobby()
 
 

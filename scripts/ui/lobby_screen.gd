@@ -21,6 +21,8 @@ var _solo_bots: SpinBox
 var _solo_teams: SpinBox
 var _solo_size: SpinBox
 var _solo_diff: OptionButton
+var _solo_map: MapPicker
+var _weapon_home: WeaponPicker
 var _solo_ffa_rows: Array[Control] = []
 var _solo_tdm_rows: Array[Control] = []
 
@@ -42,6 +44,8 @@ var _room_bots: SpinBox
 var _room_teams: SpinBox
 var _room_size: SpinBox
 var _room_diff: OptionButton
+var _room_map: MapPicker
+var _weapon_room: WeaponPicker
 var _room_settings: Control
 var _room_start: Button
 var _room_wait: Label
@@ -67,6 +71,7 @@ func _ready() -> void:
 	if reason != "":
 		_set_status(reason, true)
 	_show_current()
+	Music.play("menu")
 
 
 func _exit_tree() -> void:
@@ -118,9 +123,14 @@ func _build() -> void:
 		Settings.player_name = t.strip_edges()
 		Settings.save())
 	_row(_home, "Name", _name_edit)
+	_home.add_child(_small_header("Your weapon (start every life with it; crates still give random ones)"))
+	_weapon_home = WeaponPicker.new(Vector2(118, 104))
+	_weapon_home.selected = Settings.weapon_pick
+	_weapon_home.picked.connect(_on_weapon_picked)
+	_home.add_child(_weapon_home)
 
 	_tabs = TabContainer.new()
-	_tabs.custom_minimum_size = Vector2(0, 420)
+	_tabs.custom_minimum_size = Vector2(0, 640)
 	_tabs.add_theme_font_size_override("font_size", 30)
 	_home.add_child(_tabs)
 	_tabs.add_child(_build_solo())
@@ -145,10 +155,16 @@ func _build_solo() -> Control:
 	_solo_tdm_rows.append(_row(box, "Karts per team", _solo_size))
 	_solo_diff = _difficulty_option(Settings.ai_difficulty)
 	_row(box, "Bot difficulty", _solo_diff)
+	box.add_child(_small_header("Map"))
+	_solo_map = MapPicker.new(Vector2(170, 186))
+	_solo_map.selected = Settings.map_id
+	box.add_child(_solo_map)
 	var start := ThemeBuilder.make_button("START", false, Vector2(320, 76))
 	start.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	start.pressed.connect(_on_solo_start)
 	box.add_child(start)
+	# Keyboard / gamepad users land on START.
+	start.grab_focus.call_deferred()
 	_update_solo_rows()
 	return box.get_parent().get_parent()
 
@@ -262,6 +278,15 @@ func _build_room() -> Control:
 	_room_diff = _difficulty_option(0.6)
 	_room_diff.item_selected.connect(func(_i: int) -> void: _push_room_config())
 	_row(settings, "Bot difficulty", _room_diff)
+	settings.add_child(_small_header("Map"))
+	_room_map = MapPicker.new(Vector2(150, 166))
+	_room_map.picked.connect(func(_id: String) -> void: _push_room_config())
+	settings.add_child(_room_map)
+	settings.add_child(_small_header("Your weapon"))
+	_weapon_room = WeaponPicker.new(Vector2(110, 98))
+	_weapon_room.selected = Settings.weapon_pick
+	_weapon_room.picked.connect(_on_weapon_picked)
+	settings.add_child(_weapon_room)
 
 	_room_start = ThemeBuilder.make_button("START MATCH", false, Vector2(340, 76))
 	_room_start.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -312,6 +337,15 @@ func _note(text: String) -> Label:
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_color_override("font_color", ThemeBuilder.TEXT_DIM)
 	l.add_theme_font_size_override("font_size", 18)
+	return l
+
+
+func _small_header(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", ThemeBuilder.TEAL_LIGHT)
 	return l
 
 
@@ -401,6 +435,8 @@ func _refresh_room() -> void:
 	_room_bots.value = int(Net.config["ai_count"])
 	_room_teams.value = int(Net.config["team_count"])
 	_room_size.value = int(Net.config["team_size"])
+	_room_map.selected = str(Net.config.get("map", Maps.DEFAULT))
+	_room_map.editable = host
 	for r in _room_ffa_rows:
 		r.visible = not tdm
 	for r in _room_tdm_rows:
@@ -444,7 +480,8 @@ func _player_line(p: Dictionary, color: Color) -> Label:
 		tags.append("host")
 	if int(p["peer"]) == Net.get_my_peer_id():
 		tags.append("you")
-	l.text = "   %s%s" % [p["name"], (" (%s)" % ", ".join(tags)) if not tags.is_empty() else ""]
+	var w := str(p.get("weapon", ""))
+	l.text = "   %s%s  -  %s" % [p["name"], (" (%s)" % ", ".join(tags)) if not tags.is_empty() else "", Loadout.label(w)]
 	l.add_theme_color_override("font_color", color)
 	return l
 
@@ -459,7 +496,7 @@ func _push_room_config() -> void:
 		return
 	Net.set_config({"mode": MODES[_room_mode.selected], "ai_count": int(_room_bots.value),
 		"team_count": int(_room_teams.value), "team_size": int(_room_size.value),
-		"ai_difficulty": _difficulty_value(_room_diff)})
+		"ai_difficulty": _difficulty_value(_room_diff), "map": _room_map.selected})
 
 
 static func _local_ips() -> Array:
@@ -483,6 +520,7 @@ func _on_solo_start() -> void:
 	Settings.team_count = int(_solo_teams.value)
 	Settings.team_size = int(_solo_size.value)
 	Settings.ai_difficulty = _difficulty_value(_solo_diff)
+	Settings.map_id = _solo_map.selected
 	Settings.save()
 	Net.leave()
 	GameState.reset()
@@ -490,12 +528,21 @@ func _on_solo_start() -> void:
 	get_tree().change_scene_to_file.call_deferred(GAME_SCENE)
 
 
+func _on_weapon_picked(weapon: String) -> void:
+	Settings.weapon_pick = weapon
+	Settings.save()
+	_weapon_home.selected = weapon
+	_weapon_room.selected = weapon
+	if Net.is_active():
+		Net.request_weapon(weapon)
+
+
 func _on_host_lan() -> void:
 	var err := Net.host_lan(_player_name())
 	if err != OK:
 		_set_status("Could not host on port %d (error %d). Is another game already hosting?" % [Net.LAN_PORT, err], true)
 		return
-	Net.set_config({"ai_count": 3})
+	Net.set_config({"ai_count": 3, "map": Settings.map_id})
 	_set_status("")
 	_show_current()
 
@@ -517,7 +564,7 @@ func _on_host_online() -> void:
 	if Net.host_online(_player_name()) != OK:
 		_set_status("Could not open the online connection.", true)
 		return
-	Net.set_config({"ai_count": 3})
+	Net.set_config({"ai_count": 3, "map": Settings.map_id})
 	_set_status("")
 	_show_current()
 

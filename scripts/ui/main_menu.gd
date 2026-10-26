@@ -49,6 +49,8 @@ func _ready() -> void:
 	add_child(_how_to)
 	_play_button.grab_focus()
 	_animate_title()
+	Music.play("menu")
+	Music.prefetch(Maps.ids())
 
 
 func _build_background() -> void:
