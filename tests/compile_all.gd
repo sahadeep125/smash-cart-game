@@ -9,7 +9,7 @@ func _ready() -> void:
 	for path in _scripts("res://scripts"):
 		total += 1
 		var s: Script = load(path)
-		if s == null:
+		if s == null or not s.can_instantiate():
 			failed += 1
 			print("FAIL ", path)
 	print("COMPILE RESULT: %d scripts, %d failed" % [total, failed])

@@ -40,6 +40,8 @@ var team: int = -1
 var net_id: int = -1
 ## Networked: true when another peer simulates this kart; we only show its synced state.
 var remote: bool = false
+## Weapon this kart starts each life with (see Loadout); handed out by the match authority.
+var loadout: String = ""
 ## Networked: set when the local controller pulled the trigger since the last state send.
 var net_trigger: bool = false
 
@@ -68,6 +70,9 @@ var _no_snap_time: float = 0.0
 var _was_on_floor: bool = true
 var _default_snap: float = 0.6
 var _rng := RandomNumberGenerator.new()
+var _arena: Node
+## Floor type under the kart this frame: "" (normal), "ice" or "boost" (see ArenaBase).
+var surface := ""
 
 
 func setup(p_name: String, p_color: Color, p_is_player: bool) -> void:
@@ -203,6 +208,18 @@ func respawn_at(xform: Transform3D) -> void:
 		_model.reset_pose()
 
 
+func _update_surface(on_floor: bool) -> void:
+	if _arena == null or not is_instance_valid(_arena):
+		_arena = get_tree().get_first_node_in_group("arena")
+	surface = ""
+	if on_floor and _arena != null and _arena.has_method("surface_at"):
+		surface = str(_arena.call("surface_at", global_position))
+	if surface == "boost" and controls_enabled:
+		if boost_time < 0.2:
+			drift_boosted.emit()
+		boost_time = maxf(boost_time, 0.7)
+
+
 ## Called by another kart when it bumps into this one.
 func receive_bump(delta_v: Vector3) -> void:
 	if remote:
@@ -274,6 +291,7 @@ func _physics_process(delta: float) -> void:
 	if _was_on_floor and not on_floor and velocity.y > 1.5 and not _ground_below(1.2):
 		velocity.y *= 1.4  # launch pop when leaving a kicker lip
 	_was_on_floor = on_floor
+	_update_surface(on_floor)
 	var fwd := get_forward()
 	_update_drift(delta, on_floor, in_steer, velocity.dot(fwd))
 	var right := Vector3(-fwd.z, 0.0, fwd.x)  # fwd rotated -90 deg about Y
@@ -306,6 +324,8 @@ func _physics_process(delta: float) -> void:
 				fs = move_toward(fs, 0.0, brake_decel * delta)
 			elif fs < top:
 				var a := acceleration * lerpf(1.0, 0.45, clampf(fs / top, 0.0, 1.0))
+				if surface == "ice":
+					a *= 0.6
 				if boost_time > 0.0:
 					a *= 1.8
 				fs = minf(fs + a * in_throttle * delta, top)
@@ -328,6 +348,8 @@ func _physics_process(delta: float) -> void:
 			g = drift_grip
 		if _knock_time > 0.0:
 			g = 1.2
+		if surface == "ice":
+			g *= 0.22
 		var new_ls := ls * exp(-g * delta)
 		if drifting and fs > 0.0:
 			# Some of the slide is converted back into forward motion.

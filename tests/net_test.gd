@@ -66,7 +66,7 @@ func _run() -> void:
 		else:
 			err = _host_online_with_code()
 		_check("host started (%d)" % err, err == OK)
-		Net.set_config({"mode": "tdm", "team_count": 2, "team_size": 4, "duration": MATCH_SECONDS})
+		Net.set_config({"mode": "tdm", "team_count": 2, "team_size": 4, "duration": MATCH_SECONDS, "map": "harbor"})
 		var waited := 0.0
 		while Net.players.size() < players and waited < 25.0:
 			await _seconds(0.25)
@@ -90,6 +90,7 @@ func _run() -> void:
 				print("client status ", multiplayer.multiplayer_peer.get_connection_status(), " peers ", multiplayer.get_peers(), " id ", multiplayer.get_unique_id())
 		_check("client sees the lobby", Net.players.size() >= 2)
 		Net.request_team(1)
+		Net.request_weapon("rocket")
 
 	# Wait for the game scene.
 	var waited2 := 0.0
@@ -103,6 +104,8 @@ func _run() -> void:
 	await _seconds(0.5)
 	var karts := get_tree().get_nodes_in_group("karts")
 	_check("8 karts (2 teams of 4)", karts.size() == 8)
+	var arena: ArenaBase = game.get("arena")
+	_check("host's map choice loaded (%s)" % arena.get_display_name(), arena is FrostHarbor)
 	var me: Kart = game.get("player")
 	_check("local player kart exists", me != null)
 	var teams := {}
@@ -123,6 +126,13 @@ func _run() -> void:
 		await _seconds(0.1)
 		w += 0.1
 	_check("controls enabled after countdown", me.controls_enabled)
+	await _seconds(0.8)
+	var client_kart: Kart = null
+	for k in karts:
+		if str(k.get("kart_name")).begins_with("Clienty"):
+			client_kart = k
+	_check("client's weapon pick handed out (%s)" % (client_kart.get_weapon_holder().current_weapon_id if client_kart else "?"),
+		client_kart != null and client_kart.get_weapon_holder().current_weapon_id == "rocket")
 	var start := me.global_position
 	var others := {}
 	for k in karts:

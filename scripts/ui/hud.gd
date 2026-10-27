@@ -47,6 +47,7 @@ var _wrecked_by: Label
 var _kill_feed: VBoxContainer
 var _respawn_overlay: Control
 var _respawn_label: Label
+var _respawn_weapons: WeaponPicker
 var _countdown_label: Label
 var _fps_label: Label
 var _pause_button: Button
@@ -377,6 +378,17 @@ func _build_center(parent: Control) -> void:
 	_respawn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_respawn_label.add_theme_font_size_override("font_size", 32)
 	v.add_child(_respawn_label)
+	var next := Label.new()
+	next.text = "Next life, start with:"
+	next.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	next.add_theme_font_size_override("font_size", 20)
+	next.add_theme_color_override("font_color", ThemeBuilder.TEXT_DIM)
+	v.add_child(next)
+	_respawn_weapons = WeaponPicker.new(Vector2(96, 86))
+	_respawn_weapons.mouse_filter = Control.MOUSE_FILTER_PASS
+	_respawn_weapons.custom_minimum_size = Vector2(560, 0)
+	_respawn_weapons.picked.connect(_on_respawn_weapon_picked)
+	v.add_child(_respawn_weapons)
 
 	# Red edge flash when the player is hit.
 	_damage_flash = ColorRect.new()
@@ -495,8 +507,20 @@ func _on_kart_killed(victim: Node, killer: Node, weapon_id: String) -> void:
 		var by := _kart_name(killer) if killer != null and is_instance_valid(killer) and killer != victim else ""
 		_wrecked_by.text = ("by %s" % by) if by != "" else ""
 		_wrecked_by.visible = by != ""
+		var lo: Variant = player.get("loadout")
+		_respawn_weapons.selected = str(lo) if lo != null else ""
 	elif killer != null and killer == player and victim != player:
 		_show_popup("WRECKED %s!" % _kart_name(victim).to_upper(), ThemeBuilder.GOLD)
+
+
+func _on_respawn_weapon_picked(weapon: String) -> void:
+	Settings.weapon_pick = weapon
+	Settings.save()
+	var game := get_parent()
+	if player is Kart and game != null and game.has_method("request_loadout"):
+		game.call("request_loadout", player, weapon)
+	elif player != null:
+		player.set("loadout", weapon)
 
 
 func _on_player_damaged(amount: float, _source: Node) -> void:

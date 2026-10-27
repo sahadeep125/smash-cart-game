@@ -22,6 +22,10 @@ var show_fps: bool = false
 var player_name: String = ""
 ## "ffa" or "tdm" for solo matches against bots.
 var game_mode: String = "ffa"
+## Map id from Maps, or "random".
+var map_id: String = "scrapyard"
+## Loadout id (see Loadout): "" = crates only.
+var weapon_pick: String = ""
 var team_count: int = 2
 var team_size: int = 4
 ## Online play through Supabase Realtime (your own free project; see README).
@@ -52,6 +56,8 @@ func save() -> void:
 	cfg.set_value(SECTION, "show_fps", show_fps)
 	cfg.set_value(SECTION, "player_name", player_name)
 	cfg.set_value(SECTION, "game_mode", game_mode)
+	cfg.set_value(SECTION, "map_id", map_id)
+	cfg.set_value(SECTION, "weapon_pick", weapon_pick)
 	cfg.set_value(SECTION, "team_count", team_count)
 	cfg.set_value(SECTION, "team_size", team_size)
 	cfg.set_value(SECTION, "supabase_url", supabase_url)
@@ -76,6 +82,9 @@ func load_settings() -> void:
 		show_fps = bool(cfg.get_value(SECTION, "show_fps", show_fps))
 		player_name = str(cfg.get_value(SECTION, "player_name", player_name)).substr(0, 14)
 		game_mode = "tdm" if str(cfg.get_value(SECTION, "game_mode", game_mode)) == "tdm" else "ffa"
+		var m := str(cfg.get_value(SECTION, "map_id", map_id))
+		map_id = m if m == Maps.RANDOM or Maps.has_map(m) else Maps.DEFAULT
+		weapon_pick = Loadout.sanitize(str(cfg.get_value(SECTION, "weapon_pick", weapon_pick)))
 		team_count = clampi(int(cfg.get_value(SECTION, "team_count", team_count)), 2, 4)
 		team_size = clampi(int(cfg.get_value(SECTION, "team_size", team_size)), 1, 4)
 		supabase_url = str(cfg.get_value(SECTION, "supabase_url", supabase_url)).strip_edges()

@@ -11,7 +11,8 @@ be tested headless.
 | `scripts/core/` | integration | `events.gd` signal bus (autoload `Events`) |
 | `scripts/game/`, `scenes/game.tscn` | integration | `game.gd` composes one match |
 | `scripts/kart/` | Kart & Arena | `kart.gd`, `kart_model.gd`, `player_controller.gd`, `ai_driver.gd` |
-| `scripts/arena/` | Kart & Arena | `arena.gd` (geometry, obstacles, spawn markers) |
+| `scripts/arena/` | Kart & Arena | `arena_base.gd` (map builder), `maps.gd` (catalog), one script per map |
+| `scripts/audio/` | UI & Systems | `music.gd` (procedural music autoload) |
 | `scripts/camera/` | Kart & Arena | `follow_camera.gd` |
 | `scripts/combat/` | Combat | health, weapons, crates, projectiles, explosions, respawn |
 | `scripts/ui/`, `scenes/main_menu.tscn` | UI & Game Systems | menu, HUD, touch controls, match end, settings screen |
@@ -26,6 +27,8 @@ be tested headless.
 
 `accelerate` (W/Up), `brake` (S/Down, also reverse), `steer_left` (A/Left),
 `steer_right` (D/Right), `drift` (Shift), `fire` (Space), `pause` (Esc/P).
+Gamepad (standard layout): right trigger / A accelerate, left trigger / B brake, left
+stick / d-pad steer, shoulder buttons drift, X / Y fire, Start pause.
 Touch controls drive these same actions with `Input.action_press(action, strength)`,
 so gameplay code never needs to know whether input came from touch or keyboard.
 
@@ -59,11 +62,32 @@ so gameplay code never needs to know whether input came from touch or keyboard.
   in front (or behind, for mines: `WeaponHolder.current_weapon_id == "mine"`),
   avoids walls with raycasts and recovers when stuck.
 
-### Arena (`scripts/arena/arena.gd`, `class_name Arena extends Node3D`)
-- Builds floor, perimeter walls, obstacles, ramps on `_ready()`; collision layer 1.
-- Adds `Marker3D` children in group `"spawn_points"` (>= 8) and `"crate_spawns"` (>= 8).
-- `func get_spawn_points() -> Array[Marker3D]`, `func get_crate_spawn_points() -> Array[Marker3D]`
-- Adds its own lighting (`DirectionalLight3D`) and `WorldEnvironment`.
+### Maps (`scripts/arena/`)
+- `ArenaBase` (`extends Node3D`, group `"arena"`): subclasses fill `_build_layout()` with
+  geometry helpers (`_box`, `_cylinder`, `_wedge`, `_platform_with_ramps`, `_boost_pad`,
+  `_ice_patch`, …). All static geometry becomes one vertex-coloured mesh (plus an unshaded
+  "glow" surface) and one `StaticBody3D` on layer 1.
+- Markers: groups `"spawn_points"` (>= 8) and `"crate_spawns"` (>= 8);
+  `get_spawn_points()`, `get_crate_spawn_points()`.
+- `get_waypoint(from, to)`: AI routing onto raised platforms through their ramps.
+- `surface_at(pos) -> "" | "ice" | "boost"`: the kart reads it every physics frame
+  (ice lowers grip, boost pads trigger a boost).
+- `footprints`: 2D outlines the Play screen's `MapPreview` draws (built once, cached).
+- Maps: `Arena` (Sunset Scrapyard), `FrostHarbor`, `NeonRooftop`, `TempleRuins`.
+  `Maps` lists them by stable id (`scrapyard`, `harbor`, `rooftop`, `temple`), resolves
+  `"random"` and creates them. The match setup carries the resolved `map` id, so every
+  network peer loads the same map.
+
+### Loadouts (`scripts/combat/loadout.gd`)
+- Slot field `weapon`: `""` (crates only), `"random"` or a `WeaponDB` id. The match
+  authority (host / offline game) arms each kart with it at the start of every life
+  (`game.gd`, on `GameState` start and `Events.kart_respawned`); crates still give random
+  weapons. Clients change their pick mid-match through `MatchSync.send_loadout`.
+
+### Music (`scripts/audio/music.gd`, autoload `Music`)
+- `Music.play(track)` with `"menu"` or a map id; `Music.prefetch(ids)` renders others in
+  the background. Tracks are synthesised in time slices (about 3 ms per frame) and looped
+  on the `Music` bus. Silent in headless runs.
 
 ### FollowCamera (`scripts/camera/follow_camera.gd`, `class_name FollowCamera extends Camera3D`)
 - `var target: Node3D`; smooth chase from behind and above, looks ahead with speed,
@@ -116,6 +140,6 @@ so gameplay code never needs to know whether input came from touch or keyboard.
   Main menu) driven by `Events.match_ended`.
 
 ### Game (`scripts/game/game.gd`) — integration
-Builds Arena, player Kart (+Health, WeaponHolder, PlayerController), `Settings.ai_count` AI
+Builds the map from the setup (`Maps.create`), player Kart (+Health, WeaponHolder, PlayerController), `Settings.ai_count` AI
 karts, crates at crate spawns, RespawnManager, FollowCamera, HUD; then
 `GameState.start_match(karts)`.

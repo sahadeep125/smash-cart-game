@@ -21,9 +21,9 @@ const WEAPONS := {
 	},
 	"machine_gun": {
 		"name": "Buzz Blaster",
-		"ammo": 30,
+		"ammo": 26,
 		"cooldown": 0.08,
-		"damage": 4.0,
+		"damage": 3.5,
 		"color": Color(1.0, 0.9, 0.25),
 		"auto": true,
 		"weight": 1.0,

@@ -219,7 +219,22 @@ func _spawn_visual_bullet(kart: Kart) -> void:
 	kart.get_weapon_holder().weapon_fired.emit("machine_gun")
 
 
+## Client: ask the host to change the loadout of our kart (applies from the next life).
+func send_loadout(kart_id: int, weapon: String) -> void:
+	if is_inside_tree() and not _authority:
+		_rpc_loadout.rpc_id(1, kart_id, weapon)
+
+
 # --- RPCs: client -> host ------------------------------------------------------------
+
+@rpc("any_peer", "reliable")
+func _rpc_loadout(kart_id: int, weapon: String) -> void:
+	if not _authority or not is_inside_tree() or _owner_of(kart_id) != multiplayer.get_remote_sender_id():
+		return
+	var kart: Kart = game.get_kart(kart_id)
+	if kart != null:
+		kart.loadout = Loadout.sanitize(weapon)
+
 
 @rpc("any_peer", "reliable")
 func _rpc_ready() -> void:
